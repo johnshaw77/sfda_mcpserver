@@ -4,15 +4,26 @@ import config from "./config/config.js";
 import logger from "./config/logger.js";
 import { MCPProtocolHandler } from "./services/mcp-protocol.js";
 import { sseManager } from "./services/sse-manager.js";
+import { registerAllTools, getToolManager } from "./tools/index.js";
 
 // 建立 MCP 協議處理器實例
 const mcpHandler = new MCPProtocolHandler();
+const toolManager = getToolManager();
 
 // 驗證配置
 try {
   config.validate();
 } catch (error) {
   logger.error("Configuration validation failed:", error);
+  process.exit(1);
+}
+
+// 註冊所有工具
+try {
+  registerAllTools();
+  logger.info("Tools registration completed");
+} catch (error) {
+  logger.error("Tools registration failed:", error);
   process.exit(1);
 }
 
@@ -97,6 +108,85 @@ app.get("/sse/stats", (req, res) => {
   res.json(sseManager.getStats());
 });
 
+// 工具測試端點 - 調用特定工具
+app.post("/tools/:toolName", async (req, res) => {
+  const { toolName } = req.params;
+  const params = req.body;
+
+  try {
+    logger.info(`Testing tool: ${toolName}`, {
+      toolName,
+      params: toolManager._sanitizeParams
+        ? toolManager._sanitizeParams(params)
+        : params,
+    });
+
+    const result = await toolManager.callTool(toolName, params);
+
+    res.json({
+      success: true,
+      toolName,
+      result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error(`Tool test failed: ${toolName}`, {
+      toolName,
+      error: error.message,
+      type: error.type || "unknown",
+    });
+
+    res.status(400).json({
+      success: false,
+      toolName,
+      error: {
+        message: error.message,
+        type: error.type || "execution_error",
+        details: error.details || null,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// 工具統計端點
+app.get("/tools/stats", (req, res) => {
+  const stats = toolManager.getAllToolsStats();
+  res.json(stats);
+});
+
+// 特定工具統計端點
+app.get("/tools/:toolName/stats", (req, res) => {
+  const { toolName } = req.params;
+  const stats = toolManager.getToolStats(toolName);
+
+  if (!stats) {
+    return res.status(404).json({
+      success: false,
+      error: {
+        code: "TOOL_NOT_FOUND",
+        message: `Tool '${toolName}' not found`,
+      },
+    });
+  }
+
+  res.json(stats);
+});
+
+// 工具健康檢查端點
+app.get("/tools/health", (req, res) => {
+  const health = toolManager.healthCheck();
+
+  const statusCode =
+    health.status === "healthy"
+      ? 200
+      : health.status === "degraded"
+        ? 200
+        : 500;
+
+  res.status(statusCode).json(health);
+});
+
 // 根路徑
 app.get("/", (req, res) => {
   res.json({
@@ -105,6 +195,9 @@ app.get("/", (req, res) => {
     endpoints: {
       health: "/health",
       tools: "/tools",
+      toolTest: "/tools/:toolName",
+      toolStats: "/tools/stats",
+      toolHealth: "/tools/health",
       mcp: "/mcp",
       sse: "/sse",
       sseStats: "/sse/stats",
@@ -113,6 +206,7 @@ app.get("/", (req, res) => {
       protocolVersion: "2024-11-05",
       supported: true,
     },
+    toolsRegistered: toolManager.tools.size,
   });
 });
 

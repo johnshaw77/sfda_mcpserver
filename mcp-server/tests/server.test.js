@@ -15,14 +15,28 @@ describe("MCP Server", () => {
   });
 
   describe("工具列表端點", () => {
-    test("GET /tools 應該回傳空陣列", async () => {
+    test("GET /tools 應該回傳已註冊的工具", async () => {
       const response = await request(app).get("/tools").expect(200);
 
       expect(response.body).toHaveProperty("tools");
       expect(response.body).toHaveProperty("count");
       expect(Array.isArray(response.body.tools)).toBe(true);
-      expect(response.body.tools).toHaveLength(0);
-      expect(response.body.count).toBe(0);
+      expect(response.body.tools).toHaveLength(4); // 期望4個HR工具
+      expect(response.body.count).toBe(4);
+
+      // 驗證工具名稱
+      const toolNames = response.body.tools.map(tool => tool.name);
+      expect(toolNames).toContain("get_employee_info");
+      expect(toolNames).toContain("get_employee_list");
+      expect(toolNames).toContain("get_attendance_record");
+      expect(toolNames).toContain("get_salary_info");
+
+      // 驗證每個工具都有必要的屬性
+      response.body.tools.forEach(tool => {
+        expect(tool).toHaveProperty("name");
+        expect(tool).toHaveProperty("description");
+        expect(tool).toHaveProperty("inputSchema");
+      });
     });
   });
 

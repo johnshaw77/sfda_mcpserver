@@ -5,10 +5,10 @@
 import { jest } from "@jest/globals";
 
 // 設置全域 fetch 模擬
-global.fetch = jest.fn();
+globalThis.fetch = jest.fn();
 
 // 簡單的 Response, 模擬實現
-global.Response = class MockResponse {
+globalThis.Response = class MockResponse {
   constructor(body, init = {}) {
     this.body = body;
     this.status = init.status || 200;
@@ -29,5 +29,5 @@ global.Response = class MockResponse {
 };
 
 // 設置 setTimeout 為全域可用
-global.setTimeout = setTimeout;
-global.clearTimeout = clearTimeout;
+// globalThis.setTimeout = setTimeout;
+// globalThis.clearTimeout = clearTimeout;

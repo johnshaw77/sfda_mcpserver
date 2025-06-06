@@ -13,6 +13,8 @@
  */
 
 import logger from "../config/logger.js";
+import { getToolManager } from "../tools/index.js";
+import { ToolExecutionError } from "../tools/base-tool.js";
 
 /**
  * MCP 協議版本
@@ -130,14 +132,32 @@ export function validateMessage(message) {
 export class MCPProtocolHandler {
   constructor() {
     this.initialized = false;
+    this.toolManager = getToolManager();
+
+    // MCP 能力宣告
     this.capabilities = {
       tools: {},
       resources: {},
       prompts: {},
     };
-    this.tools = new Map();
+
+    // 舊的集合保留用於資源和提示
     this.resources = new Map();
     this.prompts = new Map();
+  }
+
+  /**
+   * 獲取工具集合（從工具管理器）
+   */
+  get tools() {
+    const toolsMap = new Map();
+    const toolsList = this.toolManager.getToolsList();
+
+    for (const tool of toolsList) {
+      toolsMap.set(tool.name, tool);
+    }
+
+    return toolsMap;
   }
 
   /**
@@ -149,26 +169,26 @@ export class MCPProtocolHandler {
 
       // 處理不同的訊息方法
       switch (message.method) {
-      case "initialize":
-        return await this.handleInitialize(message);
+        case "initialize":
+          return await this.handleInitialize(message);
 
-      case "tools/list":
-        return await this.handleToolsList(message);
+        case "tools/list":
+          return await this.handleToolsList(message);
 
-      case "tools/call":
-        return await this.handleToolsCall(message);
+        case "tools/call":
+          return await this.handleToolsCall(message);
 
-      case "resources/list":
-        return await this.handleResourcesList(message);
+        case "resources/list":
+          return await this.handleResourcesList(message);
 
-      case "prompts/list":
-        return await this.handlePromptsList(message);
+        case "prompts/list":
+          return await this.handlePromptsList(message);
 
-      default:
-        throw {
-          code: ErrorCode.METHOD_NOT_FOUND,
-          message: `Method '${message.method}' not found`,
-        };
+        default:
+          throw {
+            code: ErrorCode.METHOD_NOT_FOUND,
+            message: `Method '${message.method}' not found`,
+          };
       }
     } catch (error) {
       logger.error("MCP protocol error:", error);
@@ -227,16 +247,13 @@ export class MCPProtocolHandler {
       };
     }
 
-    const tool = this.tools.get(params.name);
-    if (!tool) {
-      throw {
-        code: ErrorCode.TOOL_NOT_FOUND,
-        message: `Tool '${params.name}' not found`,
-      };
-    }
-
     try {
-      const result = await tool.execute(params.arguments || {});
+      // 使用工具管理器調用工具
+      const result = await this.toolManager.callTool(
+        params.name,
+        params.arguments || {},
+      );
+
       return createResponse(message.id, {
         content: [
           {
@@ -246,6 +263,20 @@ export class MCPProtocolHandler {
         ],
       });
     } catch (error) {
+      // 處理工具執行錯誤
+      if (error instanceof ToolExecutionError) {
+        throw {
+          code: ErrorCode.TOOL_EXECUTION_ERROR,
+          message: error.message,
+          data: {
+            toolName: params.name,
+            errorType: error.type,
+            details: error.details,
+          },
+        };
+      }
+
+      // 其他錯誤
       throw {
         code: ErrorCode.TOOL_EXECUTION_ERROR,
         message: `Tool execution failed: ${error.message}`,
