@@ -8,6 +8,7 @@ import { GetEmployeeInfoTool } from "./get-employee-info.js";
 import { GetEmployeeListTool } from "./get-employee-list.js";
 import { GetAttendanceRecordTool } from "./get-attendance-record.js";
 import { GetSalaryInfoTool } from "./get-salary-info.js";
+import { GetDepartmentListTool } from "./get-department-list.js";
 
 /**
  * 所有可用的 HR 工具
@@ -17,6 +18,7 @@ export const hrTools = [
   GetEmployeeListTool,
   GetAttendanceRecordTool,
   GetSalaryInfoTool,
+  GetDepartmentListTool,
 ];
 
 /**

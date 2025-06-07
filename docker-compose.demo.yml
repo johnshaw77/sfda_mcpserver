@@ -1,0 +1,247 @@
+version: "3.8"
+
+# MCP Server 演示環境 Docker Compose 配置
+# 完整的演示環境，包含監控、數據庫和演示數據
+
+networks:
+  mcp-demo-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  demo-logs:
+
+services:
+  # ================================================
+  # MCP Server 主服務 (演示模式)
+  # ================================================
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    container_name: mcp-server-demo
+    restart: unless-stopped
+
+    # 演示環境變數
+    environment:
+      - NODE_ENV=demo
+      - MCP_PORT=8080
+      - LOG_LEVEL=debug
+      - METRICS_ENABLED=true
+      - SSE_ENABLED=true
+      - DEMO_MODE=true
+      - TZ=Asia/Taipei
+
+    # 埠號映射
+    ports:
+      - "8080:8080"
+
+    # 磁碟掛載
+    volumes:
+      - demo-logs:/app/logs
+      - ./demo-data:/app/demo-data:ro
+      - ./mcp-server/.env.demo:/app/.env:ro
+
+    # 網路設定
+    networks:
+      - mcp-demo-network
+
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # 依賴服務
+    depends_on:
+      - prometheus
+
+  # ================================================
+  # Prometheus 監控
+  # ================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-demo
+    restart: unless-stopped
+
+    # 配置檔案
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus-data:/prometheus
+
+    # 埠號映射
+    ports:
+      - "9090:9090"
+
+    # 啟動參數
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+
+    networks:
+      - mcp-demo-network
+
+  # ================================================
+  # Grafana 視覺化
+  # ================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-demo
+    restart: unless-stopped
+
+    # 環境變數
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=demo123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+
+    # 磁碟掛載
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+      - ./monitoring/grafana-dashboard.json:/var/lib/grafana/dashboards/mcp-dashboard.json:ro
+
+    # 埠號映射
+    ports:
+      - "3000:3000"
+
+    networks:
+      - mcp-demo-network
+
+    depends_on:
+      - prometheus
+
+  # ================================================
+  # Node Exporter (系統監控)
+  # ================================================
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter-demo
+    restart: unless-stopped
+
+    # 系統訪問權限
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+    # 啟動參數
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+
+    ports:
+      - "9100:9100"
+
+    networks:
+      - mcp-demo-network
+
+  # ================================================
+  # cAdvisor (容器監控)
+  # ================================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor-demo
+    restart: unless-stopped
+
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+
+    ports:
+      - "8081:8080"
+
+    networks:
+      - mcp-demo-network
+
+    devices:
+      - /dev/kmsg
+
+  # ================================================
+  # Redis (快取服務 - 可選)
+  # ================================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis-demo
+    restart: unless-stopped
+
+    # Redis 配置
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+    volumes:
+      - ./demo-data/redis:/data
+
+    ports:
+      - "6379:6379"
+
+    networks:
+      - mcp-demo-network
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ================================================
+  # Demo Data Generator (演示數據生成器)
+  # ================================================
+  demo-data-generator:
+    build:
+      context: ./demo-tools
+      dockerfile: Dockerfile.demo
+    container_name: demo-data-generator
+
+    environment:
+      - DEMO_INTERVAL=60000
+      - MCP_SERVER_URL=http://mcp-server:8080
+
+    volumes:
+      - ./demo-data:/app/data
+
+    networks:
+      - mcp-demo-network
+
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+  # ================================================
+  # Nginx (反向代理 - 可選)
+  # ================================================
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-demo
+    restart: unless-stopped
+
+    volumes:
+      - ./nginx/demo.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    networks:
+      - mcp-demo-network
+
+    depends_on:
+      - mcp-server
+      - grafana

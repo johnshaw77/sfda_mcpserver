@@ -60,6 +60,14 @@ app.get("/health", (req, res) => {
 
 // 工具列表端點 (HTTP API)
 app.get("/tools", (req, res) => {
+  // 調試資訊
+  logger.info("Tools endpoint called", {
+    mcpHandlerToolsSize: mcpHandler.tools.size,
+    toolManagerToolsSize: toolManager.tools.size,
+    mcpHandlerToolNames: Array.from(mcpHandler.tools.keys()),
+    toolManagerToolNames: Array.from(toolManager.tools.keys()),
+  });
+
   const tools = Array.from(mcpHandler.tools.values()).map(tool => ({
     name: tool.name,
     description: tool.description,

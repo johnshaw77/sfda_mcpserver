@@ -1,0 +1,106 @@
+{
+  "news": [
+    {
+      "id": "NEWS001",
+      "title": "MCP Server 正式上線運營",
+      "content": "經過數個月的開發與測試，公司全新的 MCP (Model Context Protocol) Server 已正式上線。這個企業級 AI 工具整合平台將大幅提升我們的自動化能力和工作效率。",
+      "author": "技術部",
+      "publish_date": "2025-06-07",
+      "category": "技術公告",
+      "priority": "high",
+      "views": 245,
+      "tags": [
+        "MCP",
+        "AI",
+        "自動化"
+      ]
+    },
+    {
+      "id": "NEWS002",
+      "title": "Q2 季度業績創新高",
+      "content": "本季度公司業績表現優異，營收較去年同期成長 35%，主要受惠於新產品線的成功推出和客戶滿意度的提升。",
+      "author": "財務部",
+      "publish_date": "2025-06-05",
+      "category": "業績報告",
+      "priority": "medium",
+      "views": 189,
+      "tags": [
+        "業績",
+        "成長",
+        "Q2"
+      ]
+    },
+    {
+      "id": "NEWS003",
+      "title": "新員工教育訓練計畫啟動",
+      "content": "為了幫助新進同事快速融入工作環境，人資部推出全新的線上教育訓練平台，涵蓋公司文化、工作流程和專業技能等課程。",
+      "author": "人力資源部",
+      "publish_date": "2025-06-03",
+      "category": "人資公告",
+      "priority": "medium",
+      "views": 156,
+      "tags": [
+        "教育訓練",
+        "新員工",
+        "線上學習"
+      ]
+    },
+    {
+      "id": "NEWS004",
+      "title": "辦公室環保措施推行",
+      "content": "為響應環保理念，公司將推行無紙化辦公、節能減碳等措施，預計可減少 40% 的紙張使用量和 20% 的能源消耗。",
+      "author": "總務部",
+      "publish_date": "2025-06-01",
+      "category": "環保公告",
+      "priority": "low",
+      "views": 98,
+      "tags": [
+        "環保",
+        "節能",
+        "無紙化"
+      ]
+    },
+    {
+      "id": "NEWS005",
+      "title": "團隊建設活動即將展開",
+      "content": "為增進同事間的感情和團隊合作精神，行政部規劃了一系列團隊建設活動，包括戶外拓展訓練和部門聚餐等。",
+      "author": "行政部",
+      "publish_date": "2025-05-28",
+      "category": "活動公告",
+      "priority": "medium",
+      "views": 134,
+      "tags": [
+        "團隊建設",
+        "活動",
+        "聚餐"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "id": "tech",
+      "name": "技術公告",
+      "description": "技術相關的公告和更新"
+    },
+    {
+      "id": "business",
+      "name": "業績報告",
+      "description": "公司業績和財務相關資訊"
+    },
+    {
+      "id": "hr",
+      "name": "人資公告",
+      "description": "人力資源相關政策和活動"
+    },
+    {
+      "id": "environment",
+      "name": "環保公告",
+      "description": "環保和可持續發展相關內容"
+    },
+    {
+      "id": "activity",
+      "name": "活動公告",
+      "description": "公司活動和聚會資訊"
+    }
+  ]
+}

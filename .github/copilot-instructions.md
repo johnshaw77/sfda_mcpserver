@@ -1,5 +1,8 @@
 # Copilot Custom Instructions
 
+- 永遠用繁體中文回覆
+- git 的自動產生訊息也使用繁體文
+
 ## 專案簡介
 
 這是一個使用 JavaScript (Node.js) 開發的後端 API 專案。  
@@ -25,7 +28,7 @@
 ## 你可以這樣協助我
 
 - 撰寫連接資料庫的程式碼，不使用 ORM, 使用原生 SQL
-- 撰寫單元測試（如有用到 Jest、Mocha 等）
+- 撰寫單元測試（如有用到 Jest 等）
 
 ## 範例
 

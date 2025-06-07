@@ -21,15 +21,25 @@ describe("MCP Server", () => {
       expect(response.body).toHaveProperty("tools");
       expect(response.body).toHaveProperty("count");
       expect(Array.isArray(response.body.tools)).toBe(true);
-      expect(response.body.tools).toHaveLength(4); // 期望4個HR工具
-      expect(response.body.count).toBe(4);
+      expect(response.body.tools).toHaveLength(8); // 期望8個工具 (5個HR + 1個財務 + 2個任務管理)
+      expect(response.body.count).toBe(8);
 
       // 驗證工具名稱
       const toolNames = response.body.tools.map(tool => tool.name);
+
+      // HR 工具
       expect(toolNames).toContain("get_employee_info");
       expect(toolNames).toContain("get_employee_list");
       expect(toolNames).toContain("get_attendance_record");
       expect(toolNames).toContain("get_salary_info");
+      expect(toolNames).toContain("get_department_list");
+
+      // 財務工具
+      expect(toolNames).toContain("get_budget_status");
+
+      // 任務管理工具
+      expect(toolNames).toContain("create_task");
+      expect(toolNames).toContain("get_task_list");
 
       // 驗證每個工具都有必要的屬性
       response.body.tools.forEach(tool => {
