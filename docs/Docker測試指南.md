@@ -14,6 +14,21 @@
 
 ## 基本 Docker 狀態檢查
 
+- MCP Server: ✅ 健康 (端口 8080)
+- Nginx: ✅ 運行中 (端口 80, 443)
+- Prometheus: ✅ 運行中 (端口 9090)
+- Grafana: ✅ 運行中 (端口 3000)
+- Redis: ✅ 健康 (端口 6379)
+- cAdvisor: ✅ 健康 (端口 8081)
+- Node Exporter: ✅ 運行中 (端口 9100)
+- Demo Data Generator: ✅ 健康
+  🌐 可用的服務端點：
+- HTTP: http://localhost:80/health ✅
+- HTTPS: https://localhost:443/health ✅ (自簽憑證)
+- MCP Server: http://localhost:8080/health ✅
+- Prometheus: http://localhost:9090/health ✅
+- Grafana: http://localhost:3000/health ✅
+
 ### 1. Docker 服務狀態
 
 ```bash
