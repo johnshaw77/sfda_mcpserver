@@ -7,6 +7,9 @@ WORKDIR /app
 # 複製 package.json 和 package-lock.json
 COPY package*.json ./
 
+# 安裝系統依賴套件（包含 curl 用於健康檢查）
+RUN apk add --no-cache curl
+
 # 安裝依賴套件
 RUN npm ci --only=production
 

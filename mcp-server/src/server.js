@@ -161,6 +161,29 @@ const callToolHandler = async (req, res, module) => {
   }
 };
 
+// HR 模組工具列表端點
+app.get("/api/hr/tools", (req, res) => {
+  const hrTools = [
+    "get_employee_info",
+    "get_employee_list",
+    "get_attendance_record",
+    "get_salary_info",
+    "get_department_list",
+  ];
+
+  const allTools = toolManager.getToolsList();
+  const hrToolsWithDetails = allTools.filter(tool =>
+    hrTools.includes(tool.name),
+  );
+
+  res.json({
+    module: "hr",
+    tools: hrToolsWithDetails,
+    count: hrToolsWithDetails.length,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // HR 模組 API 端點
 app.post("/api/hr/:toolName", async (req, res) => {
   const hrTools = [
@@ -185,6 +208,23 @@ app.post("/api/hr/:toolName", async (req, res) => {
   await callToolHandler(req, res, "hr");
 });
 
+// Finance 模組工具列表端點
+app.get("/api/finance/tools", (req, res) => {
+  const financeTools = ["get_budget_status"];
+
+  const allTools = toolManager.getToolsList();
+  const financeToolsWithDetails = allTools.filter(tool =>
+    financeTools.includes(tool.name),
+  );
+
+  res.json({
+    module: "finance",
+    tools: financeToolsWithDetails,
+    count: financeToolsWithDetails.length,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Finance 模組 API 端點
 app.post("/api/finance/:toolName", async (req, res) => {
   const financeTools = ["get_budget_status"];
@@ -201,6 +241,23 @@ app.post("/api/finance/:toolName", async (req, res) => {
   }
 
   await callToolHandler(req, res, "finance");
+});
+
+// Task Management 模組工具列表端點
+app.get("/api/tasks/tools", (req, res) => {
+  const taskTools = ["create_task", "get_task_list"];
+
+  const allTools = toolManager.getToolsList();
+  const taskToolsWithDetails = allTools.filter(tool =>
+    taskTools.includes(tool.name),
+  );
+
+  res.json({
+    module: "tasks",
+    tools: taskToolsWithDetails,
+    count: taskToolsWithDetails.length,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Task Management 模組 API 端點
@@ -316,8 +373,11 @@ app.get("/", (req, res) => {
       sseStats: "/sse/stats",
       // 新增模組化 API 端點
       hrApi: "/api/hr/:toolName",
+      hrTools: "/api/hr/tools",
       financeApi: "/api/finance/:toolName",
+      financeTools: "/api/finance/tools",
       tasksApi: "/api/tasks/:toolName",
+      tasksTools: "/api/tasks/tools",
     },
     modules: {
       hr: {

@@ -17,8 +17,8 @@ RUN npm install axios
 # 複製腳本
 COPY . .
 
-# 設定權限
-RUN chmod +x *.sh
+# 設定權限 (僅當 .sh 檔案存在時)
+RUN find . -name "*.sh" -exec chmod +x {} \; || true
 
 # 健康檢查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

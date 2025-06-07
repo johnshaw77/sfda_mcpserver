@@ -217,6 +217,14 @@ services:
     networks:
       - mcp-demo-network
 
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
     depends_on:
       mcp-server:
         condition: service_healthy
