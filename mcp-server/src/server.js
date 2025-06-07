@@ -5,6 +5,7 @@ import logger from "./config/logger.js";
 import { MCPProtocolHandler } from "./services/mcp-protocol.js";
 import { sseManager } from "./services/sse-manager.js";
 import { registerAllTools, getToolManager } from "./tools/index.js";
+import qualityRoutes from "./api/quality-routes.js";
 
 // 建立 MCP 協議處理器實例
 const mcpHandler = new MCPProtocolHandler();
@@ -115,6 +116,9 @@ app.get("/sse", (req, res) => {
 app.get("/sse/stats", (req, res) => {
   res.json(sseManager.getStats());
 });
+
+// 品質管理 API 路由
+app.use("/api/quality", qualityRoutes);
 
 // 通用工具調用函數
 const callToolHandler = async (req, res, module) => {
@@ -357,6 +361,9 @@ app.get("/tools/health", (req, res) => {
   res.status(statusCode).json(health);
 });
 
+// 品質監控 API 路由
+app.use("/api/quality", qualityRoutes);
+
 // 根路徑
 app.get("/", (req, res) => {
   res.json({
@@ -378,6 +385,11 @@ app.get("/", (req, res) => {
       financeTools: "/api/finance/tools",
       tasksApi: "/api/tasks/:toolName",
       tasksTools: "/api/tasks/tools",
+      // 品質監控 API 端點
+      qualityOverview: "/api/quality/overview",
+      qualityCache: "/api/quality/cache",
+      qualityVersions: "/api/quality/versions",
+      qualityStats: "/api/quality/stats",
     },
     modules: {
       hr: {
