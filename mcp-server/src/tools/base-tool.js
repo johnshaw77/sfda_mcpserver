@@ -15,6 +15,7 @@ import logger from "../config/logger.js";
 import { globalToolCache } from "./tool-cache.js";
 import { globalVersionManager } from "./version-manager.js";
 import { globalStatsManager, StatEventType } from "./stats-manager.js";
+import { HybridLogger } from "../logging/hybrid-logger.js";
 
 /**
  * 工具執行狀態
@@ -191,6 +192,12 @@ export class BaseTool {
       averageExecutionTime: 0,
     };
 
+    // 初始化混合日誌系統
+    this.hybridLogger = new HybridLogger({
+      serviceName: `tool-${this.name}`,
+      logLevel: process.env.LOG_LEVEL || "info",
+    });
+
     // 註冊版本
     globalVersionManager.registerToolVersion(this.name, this.version, {
       description: this.description,
@@ -314,6 +321,19 @@ export class BaseTool {
     const startTime = Date.now();
 
     try {
+      // 記錄工具調用開始 - 混合日誌
+      await this.hybridLogger.logToolCall({
+        toolName: this.name,
+        executionId,
+        params: this._sanitizeParams(params),
+        context: {
+          sessionId: context.sessionId,
+          userId: context.userId,
+          timestamp: startTime,
+        },
+        status: "started",
+      });
+
       // 記錄工具調用統計
       globalStatsManager.recordToolCall(this.name, params, {
         sessionId: context.sessionId,
@@ -322,7 +342,40 @@ export class BaseTool {
       });
 
       // 驗證輸入參數
-      this.validateInput(params);
+      try {
+        this.validateInput(params);
+      } catch (validationError) {
+        // 記錄驗證錯誤
+        await this.hybridLogger.logToolCall({
+          toolName: this.name,
+          executionId,
+          status: "error",
+          executionTime: Date.now() - startTime,
+          error: {
+            message: validationError.message,
+            type: validationError.type || "validation_error",
+            details: validationError.details,
+          },
+          context: {
+            sessionId: context.sessionId,
+            userId: context.userId,
+          },
+        });
+
+        // 記錄錯誤統計
+        globalStatsManager.recordToolError(
+          this.name,
+          validationError,
+          Date.now() - startTime,
+          {
+            sessionId: context.sessionId,
+            userId: context.userId,
+            executionId,
+          },
+        );
+
+        throw validationError;
+      }
 
       // 檢查緩存
       let result = null;
@@ -338,6 +391,16 @@ export class BaseTool {
 
         if (result !== null) {
           fromCache = true;
+
+          // 記錄緩存命中
+          await this.hybridLogger.logToolCall({
+            toolName: this.name,
+            executionId,
+            status: "cache_hit",
+            cacheKey,
+            executionTime: Date.now() - startTime,
+          });
+
           globalStatsManager.recordCacheHit(this.name, {
             sessionId: context.sessionId,
             userId: context.userId,
@@ -350,6 +413,14 @@ export class BaseTool {
             cacheKey,
           });
         } else {
+          // 記錄緩存未命中
+          await this.hybridLogger.logToolCall({
+            toolName: this.name,
+            executionId,
+            status: "cache_miss",
+            cacheKey,
+          });
+
           globalStatsManager.recordCacheMiss(this.name, {
             sessionId: context.sessionId,
             userId: context.userId,
@@ -367,6 +438,19 @@ export class BaseTool {
 
           const executionTime = Date.now() - startTime;
           this._logExecutionEnd(executionId, ToolStatus.SUCCESS, result);
+
+          // 記錄成功執行 - 混合日誌
+          await this.hybridLogger.logToolCall({
+            toolName: this.name,
+            executionId,
+            status: "success",
+            executionTime,
+            resultSize: JSON.stringify(result).length,
+            context: {
+              sessionId: context.sessionId,
+              userId: context.userId,
+            },
+          });
 
           // 記錄成功統計
           globalStatsManager.recordToolSuccess(
@@ -392,6 +476,23 @@ export class BaseTool {
         } catch (error) {
           const executionTime = Date.now() - startTime;
           this._logExecutionEnd(executionId, ToolStatus.ERROR, null, error);
+
+          // 記錄錯誤執行 - 混合日誌
+          await this.hybridLogger.logToolCall({
+            toolName: this.name,
+            executionId,
+            status: "error",
+            executionTime,
+            error: {
+              message: error.message,
+              type: error.type || "unknown",
+              stack: error.stack,
+            },
+            context: {
+              sessionId: context.sessionId,
+              userId: context.userId,
+            },
+          });
 
           // 記錄錯誤統計
           globalStatsManager.recordToolError(this.name, error, executionTime, {
@@ -522,6 +623,40 @@ export class BaseTool {
    */
   _generateExecutionId() {
     return `${this.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * 清理參數以便安全記錄（移除敏感信息）
+   */
+  _sanitizeParams(params) {
+    const sensitiveKeys = [
+      "password",
+      "token",
+      "secret",
+      "key",
+      "api_key",
+      "apikey",
+      "auth",
+    ];
+
+    if (typeof params !== "object" || params === null) {
+      return params;
+    }
+
+    const sanitized = {};
+    for (const [key, value] of Object.entries(params)) {
+      const lowerKey = key.toLowerCase();
+
+      if (sensitiveKeys.some(sensitiveKey => lowerKey.includes(sensitiveKey))) {
+        sanitized[key] = "[REDACTED]";
+      } else if (typeof value === "object" && value !== null) {
+        sanitized[key] = this._sanitizeParams(value);
+      } else {
+        sanitized[key] = value;
+      }
+    }
+
+    return sanitized;
   }
 
   /**

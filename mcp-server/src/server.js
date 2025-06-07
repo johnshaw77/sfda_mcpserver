@@ -6,6 +6,8 @@ import { MCPProtocolHandler } from "./services/mcp-protocol.js";
 import { sseManager } from "./services/sse-manager.js";
 import { registerAllTools, getToolManager } from "./tools/index.js";
 import qualityRoutes from "./api/quality-routes.js";
+import logMiddleware from "./middleware/logging.js";
+import createLoggingRoutes from "./routes/logging-api.js";
 
 // 建立 MCP 協議處理器實例
 const mcpHandler = new MCPProtocolHandler();
@@ -28,6 +30,10 @@ try {
   process.exit(1);
 }
 
+// 啟動混合日誌系統健康監控
+logMiddleware.startHealthMonitoring();
+logger.info("Hybrid logging system initialized");
+
 const app = express();
 
 // 中間件設定
@@ -35,7 +41,10 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// 請求日誌中間件
+// 混合日誌中間件 (記錄 API 存取)
+app.use(logMiddleware.accessLogger());
+
+// 請求日誌中間件 (Winston)
 app.use((req, res, next) => {
   logger.info(`${req.method} ${req.path}`, {
     ip: req.ip,
@@ -364,6 +373,9 @@ app.get("/tools/health", (req, res) => {
 // 品質監控 API 路由
 app.use("/api/quality", qualityRoutes);
 
+// 日誌管理 API 路由
+app.use("/api/logging", createLoggingRoutes(logMiddleware));
+
 // 根路徑
 app.get("/", (req, res) => {
   res.json({
@@ -390,6 +402,13 @@ app.get("/", (req, res) => {
       qualityCache: "/api/quality/cache",
       qualityVersions: "/api/quality/versions",
       qualityStats: "/api/quality/stats",
+      // 日誌管理 API 端點
+      loggingStatus: "/api/logging/status",
+      loggingToolStats: "/api/logging/tools/stats",
+      loggingMetrics: "/api/logging/metrics/:metricName",
+      loggingAlerts: "/api/logging/alerts",
+      loggingSearch: "/api/logging/search",
+      loggingFiles: "/api/logging/files/:logType/tail",
     },
     modules: {
       hr: {
@@ -431,6 +450,9 @@ app.use((error, req, res, next) => {
     },
   });
 });
+
+// 錯誤處理中介層 (必須在所有路由之後)
+app.use(logMiddleware.errorLogger());
 
 // 404 處理
 app.use((req, res) => {
