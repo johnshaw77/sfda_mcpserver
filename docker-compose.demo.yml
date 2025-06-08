@@ -39,7 +39,7 @@ services:
 
     # 磁碟掛載
     volumes:
-      - demo-logs:/app/logs
+      - ./demo-data/logs:/app/logs:rw
       - ./demo-data:/app/demo-data:ro
       - ./mcp-server/.env.demo:/app/.env:ro
 
@@ -113,7 +113,7 @@ services:
 
     # 埠號映射
     ports:
-      - "3000:3000"
+      - "4000:3000"
 
     networks:
       - mcp-demo-network

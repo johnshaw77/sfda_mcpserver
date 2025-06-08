@@ -412,6 +412,8 @@ app.get("/", (req, res) => {
     },
     modules: {
       hr: {
+        description:
+          "人力資源管理模組，提供員工資訊查詢、出勤記錄、薪資查詢、部門管理等功能",
         endpoint: "/api/hr/:toolName",
         tools: [
           "get_employee_info",
@@ -422,10 +424,13 @@ app.get("/", (req, res) => {
         ],
       },
       finance: {
+        description: "財務管理模組，提供預算狀態查詢、財務報表、成本分析等功能",
         endpoint: "/api/finance/:toolName",
         tools: ["get_budget_status"],
       },
       tasks: {
+        description:
+          "任務管理模組，提供任務創建、列表查詢、狀態追蹤、專案管理等功能",
         endpoint: "/api/tasks/:toolName",
         tools: ["create_task", "get_task_list"],
       },
