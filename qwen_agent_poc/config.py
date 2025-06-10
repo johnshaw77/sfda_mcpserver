@@ -10,7 +10,7 @@ load_dotenv()
 
 # MCP Server 配置
 MCP_SERVER_CONFIG = {
-    "base_url": "http://localhost:8080",
+    "base_url": os.getenv("MCP_SERVER_URL", "http://localhost:8080"),
     "timeout": 30,
     "retry_attempts": 3,
     "retry_delay": 1.0,
@@ -20,7 +20,7 @@ MCP_SERVER_CONFIG = {
 QWEN_MODEL_CONFIG = {
     # 使用本地 Ollama 模型（用戶已安裝）
     "model": "qwen3:30b",  # 使用用戶現有的 qwen3:30b 模型
-    "api_base": "http://localhost:11434/v1",  # Ollama 端點
+    "api_base": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434") + "/v1",  # Ollama 端點
     "api_key": "ollama",  # Ollama 不需要真實 API key
     
     # 或者使用其他可用模型
@@ -40,8 +40,8 @@ QWEN_MODEL_CONFIG = {
 
 # Agent 人格和行為設定
 AGENT_CONFIG = {
-    "name": "SFDA 智能助理",
-    "description": "專業的企業助理，擅長處理人力資源、任務管理和財務查詢",
+    "name": os.getenv("AGENT_NAME", "SFDA 智能助理"),
+    "description": os.getenv("AGENT_DESCRIPTION", "專業的企業助理，擅長處理人力資源、任務管理和財務查詢"),
     "instructions": """
 你是一個專業的企業智能助理，具備以下特點：
 
@@ -130,14 +130,14 @@ GRADIO_CONFIG = {
     試試看讓 AI 組合使用多個工具完成複雜任務！
     """,
     "theme": "soft",
-    "port": 7860,
-    "share": False,
-    "server_name": "0.0.0.0"
+    "port": int(os.getenv("GRADIO_SERVER_PORT", "7860")),
+    "share": os.getenv("GRADIO_SHARE", "false").lower() == "true",
+    "server_name": os.getenv("GRADIO_SERVER_NAME", "0.0.0.0")
 }
 
 # 日誌配置
 LOGGING_CONFIG = {
-    "level": "INFO",
+    "level": os.getenv("LOG_LEVEL", "INFO"),
     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     "file": "qwen_agent_poc.log"
 } 

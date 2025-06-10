@@ -1,5 +1,3 @@
-version: "3.8"
-
 # MCP Server Docker Compose 配置
 # 企業級 AI + MCP 系統的容器編排文件
 
@@ -88,7 +86,66 @@ services:
       - nginx
 
   # ================================================
-  # Redis 快取 (未來擴展)
+  # Qwen-Agent Gradio UI
+  # ================================================
+  qwen-agent-ui:
+    build:
+      context: ./qwen_agent_poc
+      dockerfile: Dockerfile
+    container_name: qwen-agent-ui
+    restart: unless-stopped
+
+    ports:
+      - "7860:7860"
+
+    environment:
+      # MCP Server 連接配置
+      - MCP_SERVER_URL=http://mcp-server:8080
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      
+      # Gradio 配置
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7860
+      - GRADIO_SHARE=false
+      
+      # Agent 配置
+      - AGENT_NAME=SFDA智能助理
+      - AGENT_DESCRIPTION=基於Qwen大語言模型的企業級智能助理
+      
+      # 日誌配置
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+
+    volumes:
+      # 對話歷史持久化
+      - qwen-agent-data:/app/logs
+      - qwen-agent-exports:/app/exports
+
+    networks:
+      - mcp-network
+
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # 只有在需要時才啟用
+    profiles:
+      - qwen-agent
+
+    labels:
+      - "com.sfda.service=qwen-agent-ui"
+      - "com.sfda.component=ai-interface"
+      - "com.sfda.version=1.0.0"
+
+  # ================================================
+  # Redis 快取
   # ================================================
   redis:
     image: redis:7-alpine
@@ -100,16 +157,19 @@ services:
 
     volumes:
       - redis-data:/data
-      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
 
-    command: redis-server /usr/local/etc/redis/redis.conf
+    command: redis-server --appendonly yes
 
     networks:
       - mcp-network
 
-    # 只有在需要時才啟用
-    profiles:
-      - cache
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    # 預設啟動（移除 profiles，因為 Qwen-Agent 需要）
 
   # ================================================
   # PostgreSQL 資料庫 (未來擴展)
@@ -229,4 +289,12 @@ volumes:
 
   # Grafana 資料
   grafana-data:
+    driver: local
+
+  # Qwen-Agent 資料
+  qwen-agent-data:
+    driver: local
+
+  # Qwen-Agent 匯出
+  qwen-agent-exports:
     driver: local
