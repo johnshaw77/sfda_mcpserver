@@ -50,7 +50,7 @@ check_docker() {
 check_ports() {
     log_info "檢查必要埠號是否可用..."
     
-    ports=(8080 3000 9090 9100 6379)
+    ports=(8080 4000 9090 9100 6379)
     for port in "${ports[@]}"; do
         if lsof -i :$port &> /dev/null; then
             log_warning "埠號 $port 已被佔用"
@@ -137,7 +137,7 @@ show_services() {
     log_info "演示環境服務資訊："
     echo "=================================="
     echo "🚀 MCP Server:     http://localhost:8080"
-    echo "📊 Grafana:        http://localhost:3000 (admin/demo123)"
+    echo "📊 Grafana:        http://localhost:4000 (admin/demo123)"
     echo "🔍 Prometheus:     http://localhost:9090"
     echo "📈 Node Exporter:  http://localhost:9100"
     echo "🗄️  Redis:          localhost:6379"

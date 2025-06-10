@@ -164,7 +164,7 @@ services:
       - /dev/disk/:/dev/disk:ro
 
     ports:
-      - "8081:8080"
+      - "9101:8080"
 
     networks:
       - mcp-demo-network

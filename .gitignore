@@ -1,0 +1,54 @@
+# SpecStory explanation file
+.specstory/.what-is-this.md
+node_modules
+dist/
+.specstory/
+
+# 依賴
+node_modules/
+package-lock.json
+
+# 環境變數
+# .env
+# .env.local
+# .env.*.local
+
+# 日誌
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 系統文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE 和編輯器文件
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 建置和輸出目錄
+/dist
+/build
+
+# Prisma
+/prisma/*.db
+
+# 其他
+.cursorindexingignore
+
+*.pyc
+
+/backend/uploads/
+.DS_Store
