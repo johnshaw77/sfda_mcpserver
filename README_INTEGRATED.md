@@ -1,4 +1,4 @@
-# SFDA Nexus × Qwen-Agent 整合部署指南
+# SFDA Nexus × Qwen-Agent 整合部署指南 0610 2025
 
 > 🏎️ 企業級 AI 助理 × MCP 服務器的統一容器化部署方案
 
