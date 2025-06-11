@@ -153,15 +153,15 @@ export class GetEmployeeListTool extends BaseTool {
     const allEmployees = [
       {
         employeeId: "A123456",
-        name: "張小明",
-        englishName: "Ming Zhang",
-        department: { code: "IT", name: "資訊技術部" },
+        name: "蕭傳璋",
+        englishName: "John Hsiao",
+        department: { code: "KD", name: "數據分析部" },
         jobTitle: "資深軟體工程師",
         jobLevel: "P5",
         status: "active",
         hireDate: "2020-03-01",
         email: "ming.zhang@company.com",
-        phone: "0912-345-678",
+        phone: "0922-035-967",
       },
       {
         employeeId: "A123457",

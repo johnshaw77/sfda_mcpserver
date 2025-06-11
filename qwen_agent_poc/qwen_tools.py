@@ -3,11 +3,16 @@ Qwen-Agent 工具定義
 基於 BaseTool 創建 SFDA MCP Server 工具
 """
 
+import json
+import logging
 from qwen_agent.tools import BaseTool
 from mcp_tools import (
     get_employee_info, get_employee_list, get_attendance_record, get_department_list,
     create_task, get_task_list, get_budget_status
 )
+from tool_result_enforcer import tool_result_enforcer
+
+logger = logging.getLogger(__name__)
 
 class GetEmployeeInfoTool(BaseTool):
     name = "get_employee_info"
@@ -28,9 +33,43 @@ class GetEmployeeInfoTool(BaseTool):
     ]
     
     def call(self, parameters, **kwargs):
+        """執行工具並強制結果使用"""
         employeeId = parameters.get("employeeId")
         includeDetails = parameters.get("includeDetails", True)
-        return get_employee_info(employeeId, includeDetails)
+        
+        # 執行工具
+        result = get_employee_info(employeeId, includeDetails)
+        
+        # 註冊工具結果
+        call_id = tool_result_enforcer.register_tool_result(
+            "get_employee_info", parameters, result
+        )
+        
+        # 記錄詳細執行過程
+        logger.info(f"🔧 執行 get_employee_info: {employeeId} -> {result}")
+        
+        # 檢查結果類型並強制返回實際結果
+        if isinstance(result, dict) and "error" in result:
+            # 如果是錯誤結果，直接返回錯誤訊息
+            return f"❌ 查詢失敗：{result.get('error', '未知錯誤')}"
+        elif isinstance(result, dict) and "data" in result:
+            # 如果是成功結果，返回格式化的員工資料
+            employee_data = result["data"]
+            return f"""✅ 員工資料查詢成功
+
+員工編號：{employee_data.get('employeeId', 'N/A')}
+姓名：{employee_data.get('name', 'N/A')}
+部門：{employee_data.get('department', 'N/A')}
+職位：{employee_data.get('jobTitle', 'N/A')}
+電子郵件：{employee_data.get('email', 'N/A')}
+電話：{employee_data.get('phone', 'N/A')}
+入職日期：{employee_data.get('hireDate', 'N/A')}
+狀態：{employee_data.get('status', 'N/A')}
+
+[工具執行ID: {call_id}]"""
+        else:
+            # 其他情況，返回原始結果
+            return f"🔧 工具執行結果：{result}\n[工具執行ID: {call_id}]"
 
 class GetEmployeeListTool(BaseTool):
     name = "get_employee_list"

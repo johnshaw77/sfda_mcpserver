@@ -48,6 +48,9 @@ export class GetEmployeeInfoTool extends BaseTool {
         },
         required: ["employeeId"],
       },
+      {
+        cacheable: false, // 停用快取，避免個人資料被誤用
+      },
     );
   }
 
@@ -76,11 +79,24 @@ export class GetEmployeeInfoTool extends BaseTool {
         fields,
       );
 
-      if (!employeeData) {
+      // 加強錯誤處理：明確檢查員工是否存在
+      if (!employeeData || Object.keys(employeeData).length === 0) {
+        logger.warn(`Employee not found in database: ${employeeId}`, {
+          toolName: this.name,
+          employeeId,
+          searchedFields: fields,
+        });
+
         throw new ToolExecutionError(
-          `Employee not found: ${employeeId}`,
-          ToolErrorType.API_ERROR,
-          { employeeId },
+          `找不到員工資料：員工編號 ${employeeId} 不存在於系統中。請確認員工編號是否正確。`,
+          ToolErrorType.NOT_FOUND,
+          {
+            employeeId,
+            message: "員工不存在",
+            availableEmployees: ["A123456", "A123457"],
+            suggestedAction:
+              "請檢查員工編號格式是否正確，或聯絡人資部門確認員工資料",
+          },
         );
       }
 
@@ -223,8 +239,19 @@ export class GetEmployeeInfoTool extends BaseTool {
     // 檢查員工是否存在
     const employeeData = mockDatabase[employeeId];
     if (!employeeData) {
+      logger.warn(`Employee ID ${employeeId} not found in mock database`, {
+        employeeId,
+        availableEmployees: Object.keys(mockDatabase),
+        requestedFields: fields,
+      });
       return null;
     }
+
+    logger.info(`Employee found in mock database: ${employeeId}`, {
+      employeeId,
+      name: employeeData.basic?.name,
+      department: employeeData.department?.departmentName,
+    });
 
     // 根據請求的欄位建構返回資料
     const result = {};

@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 # SFDA Nexus × Qwen-Agent 完整服務堆疊
 services:
@@ -15,39 +15,39 @@ services:
       # MCP Server 連接配置
       - MCP_SERVER_URL=http://sfda-mcp-server:8080
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
-      
+
       # Gradio 配置
       - GRADIO_SERVER_NAME=0.0.0.0
       - GRADIO_SERVER_PORT=7860
       - GRADIO_SHARE=false
-      
+
       # Agent 配置
       - AGENT_NAME=SFDA智能助理
       - AGENT_DESCRIPTION=基於Qwen大語言模型的企業級智能助理
-      
+
       # 日誌配置
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
-    
+
     volumes:
       # 對話歷史持久化
       - qwen_agent_data:/app/logs
       - qwen_agent_exports:/app/exports
-    
+
     networks:
       - sfda-network
       - qwen-agent-network
-    
+
     depends_on:
       - sfda-mcp-server
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7860"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    
+
     labels:
       - "com.sfda.service=qwen-agent-ui"
       - "com.sfda.component=ai-interface"
@@ -56,7 +56,7 @@ services:
   # SFDA MCP Server（如果尚未運行）
   sfda-mcp-server:
     build:
-      context: .
+      context: ./mcp-server
       dockerfile: Dockerfile
     container_name: sfda-mcp-server
     restart: unless-stopped
@@ -66,21 +66,21 @@ services:
       - NODE_ENV=production
       - PORT=8080
       - LOG_LEVEL=info
-    
+
     volumes:
       - mcp_server_data:/app/data
       - mcp_server_logs:/app/logs
-    
+
     networks:
       - sfda-network
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    
+
     labels:
       - "com.sfda.service=mcp-server"
       - "com.sfda.component=backend"
@@ -97,7 +97,7 @@ services:
     networks:
       - sfda-network
     command: redis-server --appendonly yes
-    
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -122,7 +122,7 @@ services:
     depends_on:
       - qwen-agent-ui
       - sfda-mcp-server
-    
+
     labels:
       - "com.sfda.service=nginx"
       - "com.sfda.component=proxy"
@@ -145,7 +145,7 @@ volumes:
   qwen_agent_exports:
     driver: local
     name: sfda_qwen_agent_exports
-  
+
   # MCP Server 資料
   mcp_server_data:
     driver: local
@@ -153,13 +153,13 @@ volumes:
   mcp_server_logs:
     driver: local
     name: sfda_mcp_server_logs
-  
+
   # Redis 資料
   redis_data:
     driver: local
     name: sfda_redis_data
-  
+
   # Nginx 日誌
   nginx_logs:
     driver: local
-    name: sfda_nginx_logs 
+    name: sfda_nginx_logs

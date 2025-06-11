@@ -41,6 +41,7 @@ export const ToolErrorType = {
   CONFIGURATION_ERROR: "configuration_error",
   RATE_LIMIT_ERROR: "rate_limit_error",
   AUTHENTICATION_ERROR: "authentication_error",
+  NOT_FOUND: "not_found",
 };
 
 /**

@@ -28,6 +28,7 @@ except ImportError as e:
 from config import QWEN_MODEL_CONFIG, AGENT_CONFIG, TEST_CASES
 from mcp_tools import test_mcp_connection
 from qwen_tools import get_qwen_tools, get_tool_descriptions
+from tool_result_enforcer import tool_result_enforcer
 
 class SFDAQwenAgent:
     """SFDA Qwen-Agent 整合類"""
@@ -112,12 +113,26 @@ class SFDAQwenAgent:
 - 提供可行的改善建議
 - 保護敏感資訊的隱私
 
+⚠️ **重要工具調用規則**：
+- 當工具調用返回錯誤或找不到數據時，必須明確告知用戶錯誤情況
+- 絕對不要基於記憶、推測或訓練數據來編造或生成不存在的員工資料
+- 如果員工編號不存在，直接回報"員工編號不存在"，不要提供任何虛假資料
+- 如果員工編號格式錯誤，說明正確格式並要求重新輸入
+- 只能基於工具調用的實際結果來回應，不要補充任何未經工具驗證的資訊
+- 當工具返回錯誤訊息時，必須如實轉達給用戶，不可改寫或美化
+
+🚫 **嚴禁行為**：
+- 編造不存在的員工姓名、部門、職位等資訊
+- 在工具調用失敗時提供任何員工相關數據
+- 基於部分資訊推測完整員工資料
+- 忽略工具調用的錯誤結果
+
 現在，請作為專業的企業智能助理，協助用戶處理各種人力資源、任務管理和財務相關的需求。
 """
         return system_prompt.strip()
     
     def chat(self, message: str) -> str:
-        """與 Agent 進行對話"""
+        """與 Agent 進行對話，強制使用工具結果"""
         try:
             logger.info(f"🗣️ 用戶輸入: {message}")
             
@@ -133,16 +148,21 @@ class SFDAQwenAgent:
             response = self.agent.run(messages)
             
             # 處理回應（生成器轉換為列表）
+            tool_calls_made = []
             if hasattr(response, '__iter__') and hasattr(response, '__next__'):
                 # 這是一個生成器，轉換為列表
                 response_list = list(response)
                 logger.info(f"收到 {len(response_list)} 個回應項目")
                 
                 if response_list:
-                    # 查找最終回應
+                    # 查找最終回應和工具調用
                     final_response = ""
                     for item in response_list:
                         if isinstance(item, dict):
+                            # 檢查是否為工具調用
+                            if "tool_call" in item or "function_call" in item:
+                                tool_calls_made.append(item)
+                            
                             # 檢查不同的回應格式
                             if 'content' in item:
                                 final_response = item['content']
@@ -169,11 +189,30 @@ class SFDAQwenAgent:
             else:
                 final_response = str(response)
             
+            # 🚨 強制工具結果執行檢查
+            context = {"employee_id": self._extract_employee_id(message)}
+            
+            # 如果有工具調用，強制使用工具結果
+            if tool_calls_made:
+                logger.info(f"🔧 偵測到 {len(tool_calls_made)} 個工具調用")
+                final_response = tool_result_enforcer.enforce_tool_only_response(
+                    tool_calls_made, final_response
+                )
+            
+            # 驗證回應內容
+            validation_result = tool_result_enforcer.validate_response(final_response, context)
+            
+            if not validation_result["is_valid"]:
+                logger.error(f"🚨 偵測到編造內容: {validation_result['fabricated_content']}")
+                final_response = validation_result["corrected_response"]
+            
             # 記錄回應歷史
             self.conversation_history.append({
                 "role": "assistant", 
                 "content": final_response,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "validation": validation_result,
+                "tool_calls": tool_calls_made
             })
             
             logger.info(f"🤖 Agent 回應: {final_response[:100]}...")
@@ -185,6 +224,13 @@ class SFDAQwenAgent:
             logger.error(error_msg)
             logger.error(f"完整錯誤追蹤: {traceback.format_exc()}")
             return error_msg
+    
+    def _extract_employee_id(self, message: str) -> str:
+        """從訊息中提取員工編號"""
+        import re
+        # 查找 A + 6位數字的模式
+        match = re.search(r'A\d{6}', message)
+        return match.group(0) if match else ""
     
     def run_test_cases(self):
         """執行預定義的測試案例"""

@@ -83,9 +83,34 @@ def get_employee_info(employeeId: str, includeDetails: bool = True, fields: List
             params["fields"] = fields
             
         result = mcp_client.call_tool("hr", "get_employee_info", params)
+        
+        # 檢查是否為錯誤回應
+        if isinstance(result, dict):
+            # 檢查外層錯誤
+            if result.get("success") == False or "error" in result:
+                error_msg = result.get("error", result.get("message", "未知錯誤"))
+                if "not_found" in str(error_msg).lower() or "不存在" in str(error_msg):
+                    return f"❌ 員工編號 {employeeId} 不存在於系統中，請檢查編號是否正確。"
+                else:
+                    return f"❌ 查詢員工資訊時發生錯誤: {error_msg}"
+            
+            # 檢查內層結果的錯誤
+            inner_result = result.get("result", {})
+            if isinstance(inner_result, dict) and inner_result.get("success") == False:
+                error_info = inner_result.get("error", {})
+                error_type = error_info.get("type", "")
+                error_msg = error_info.get("message", "未知錯誤")
+                
+                if "not_found" in str(error_type).lower() or "不存在" in str(error_msg):
+                    return f"❌ 錯誤：員工編號 {employeeId} 不存在於系統中，請檢查編號是否正確。"
+                elif "validation_error" in str(error_type).lower():
+                    return f"❌ 錯誤：員工編號格式不正確。正確格式為一個大寫字母加六位數字（例如：A123456）。您輸入的 {employeeId} 不符合要求。"
+                else:
+                    return f"❌ 系統錯誤：{error_msg}"
+        
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
-        return f"查詢員工資訊時發生錯誤: {str(e)}"
+        return f"❌ 查詢員工資訊時發生系統錯誤: {str(e)}"
 
 def get_employee_list(department: str = None, jobTitle: str = None, status: str = "active", 
                      page: int = 1, limit: int = 20, includeDetails: bool = False) -> str:
@@ -418,6 +443,44 @@ def test_mcp_connection():
     except Exception as e:
         print(f"❌ MCP Server 連接失敗: {e}")
         return False
+
+def get_tools_status() -> Dict:
+    """獲取 MCP Server 的工具狀態資訊"""
+    try:
+        client = MCPClient()
+        
+        # 測試連接狀態
+        connection_status = test_mcp_connection()
+        
+        if not connection_status:
+            return {
+                "connection_status": "❌ 錯誤",
+                "error_message": "無法連接到 MCP Server",
+                "tools_count": 0,
+                "tools_list": []
+            }
+        
+        # 獲取工具列表
+        tools_data = client._make_request("GET", "/tools")
+        tools_list = tools_data.get("tools", [])
+        
+        return {
+            "connection_status": "✅ 已連接",
+            "error_message": None,
+            "tools_count": len(tools_list),
+            "tools_list": [tool.get("name", "Unknown") for tool in tools_list],
+            "server_url": client.base_url,
+            "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取工具狀態失敗: {e}")
+        return {
+            "connection_status": "❌ 錯誤",
+            "error_message": str(e),
+            "tools_count": 0,
+            "tools_list": []
+        }
 
 if __name__ == "__main__":
     # 執行連接測試
