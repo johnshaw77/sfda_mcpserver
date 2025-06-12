@@ -9,9 +9,7 @@ import { getToolManager } from "../tools/index.js";
 const toolManager = getToolManager();
 
 // 定義此模組包含的工具
-const financeTools = [
-  "get_budget_status"
-];
+const financeTools = ["get_budget_status"];
 
 // 創建模組路由
 const financeRoutes = createModuleRoutes("finance", financeTools, toolManager);

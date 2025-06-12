@@ -1,6 +1,6 @@
 /**
  * 模組路由工廠
- * 
+ *
  * 這個工廠函數可以為任何工具模組創建標準的 API 端點
  * 包括工具列表端點和工具調用端點
  */
@@ -17,41 +17,41 @@ import logger from "../config/logger.js";
  */
 export function createModuleRoutes(moduleName, toolNames, toolManager) {
   const router = express.Router();
-  
+
   // 工具列表端點 GET /api/{module}/tools
   router.get("/tools", (req, res) => {
     const allTools = toolManager.getToolsList();
-    const moduleToolsWithDetails = allTools.filter(tool => 
-      toolNames.includes(tool.name)
+    const moduleToolsWithDetails = allTools.filter(tool =>
+      toolNames.includes(tool.name),
     );
 
     res.json({
       module: moduleName,
       tools: moduleToolsWithDetails,
       count: moduleToolsWithDetails.length,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   });
-  
+
   // 工具調用端點 POST /api/{module}/:toolName
   router.post("/:toolName", async (req, res) => {
     const { toolName } = req.params;
-    
+
     // 檢查請求的工具是否在此模組中
     if (!toolNames.includes(toolName)) {
       return res.status(404).json({
         success: false,
         error: {
           code: "TOOL_NOT_FOUND",
-          message: `${moduleName} tool '${toolName}' not found. Available tools: ${toolNames.join(", ")}`
-        }
+          message: `${moduleName} tool '${toolName}' not found. Available tools: ${toolNames.join(", ")}`,
+        },
       });
     }
-    
+
     // 調用工具
     await callToolHandler(req, res, moduleName, toolManager);
   });
-  
+
   return router;
 }
 
@@ -69,7 +69,7 @@ async function callToolHandler(req, res, module, toolManager) {
       toolName,
       params: toolManager._sanitizeParams
         ? toolManager._sanitizeParams(params)
-        : params
+        : params,
     });
 
     const result = await toolManager.callTool(toolName, params);
@@ -79,14 +79,14 @@ async function callToolHandler(req, res, module, toolManager) {
       module,
       toolName,
       result,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     logger.error(`${module} tool failed: ${toolName}`, {
       module,
       toolName,
       error: error.message,
-      type: error.type || "unknown"
+      type: error.type || "unknown",
     });
 
     res.status(400).json({
@@ -96,9 +96,9 @@ async function callToolHandler(req, res, module, toolManager) {
       error: {
         message: error.message,
         type: error.type || "execution_error",
-        details: error.details || null
+        details: error.details || null,
       },
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 }

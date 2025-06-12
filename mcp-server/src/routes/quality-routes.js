@@ -117,9 +117,9 @@ router.delete("/cache/:key", (req, res) => {
       });
     }
   } catch (error) {
-    logger.error("Failed to delete cache item", { 
+    logger.error("Failed to delete cache item", {
       error: error.message,
-      key: req.params.key
+      key: req.params.key,
     });
     res.status(500).json({
       success: false,
@@ -135,7 +135,7 @@ router.delete("/cache/:key", (req, res) => {
 router.get("/versions", (req, res) => {
   try {
     const versions = globalVersionManager.getAllVersions();
-    
+
     res.json({
       success: true,
       data: {
@@ -161,14 +161,14 @@ router.get("/stats/:toolName", (req, res) => {
   try {
     const { toolName } = req.params;
     const stats = globalStatsManager.getToolStats(toolName);
-    
+
     if (!stats) {
       return res.status(404).json({
         success: false,
         error: `No statistics found for tool: ${toolName}`,
       });
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -178,9 +178,9 @@ router.get("/stats/:toolName", (req, res) => {
       },
     });
   } catch (error) {
-    logger.error("Failed to get tool stats", { 
+    logger.error("Failed to get tool stats", {
       error: error.message,
-      toolName: req.params.toolName 
+      toolName: req.params.toolName,
     });
     res.status(500).json({
       success: false,
@@ -197,7 +197,7 @@ router.get("/stats", (req, res) => {
   try {
     const globalStats = globalStatsManager.getGlobalStats();
     const topTools = globalStatsManager.getTopTools(5);
-    
+
     res.json({
       success: true,
       data: {

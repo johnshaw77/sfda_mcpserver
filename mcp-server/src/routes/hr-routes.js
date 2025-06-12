@@ -14,7 +14,7 @@ const hrTools = [
   "get_employee_list",
   "get_attendance_record",
   "get_salary_info",
-  "get_department_list"
+  "get_department_list",
 ];
 
 // 創建模組路由

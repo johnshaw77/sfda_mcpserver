@@ -9,10 +9,7 @@ import { getToolManager } from "../tools/index.js";
 const toolManager = getToolManager();
 
 // 定義此模組包含的工具
-const taskTools = [
-  "create_task",
-  "get_task_list"
-];
+const taskTools = ["create_task", "get_task_list"];
 
 // 創建模組路由
 const taskRoutes = createModuleRoutes("tasks", taskTools, toolManager);

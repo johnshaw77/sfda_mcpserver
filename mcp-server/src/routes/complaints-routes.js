@@ -13,10 +13,14 @@ const complaintsTools = [
   "get_complaints_list",
   "get_complaint_detail",
   "get_complaints_statistics",
-  "update_complaint_status"
+  "update_complaint_status",
 ];
 
 // 創建模組路由
-const complaintsRoutes = createModuleRoutes("complaints", complaintsTools, toolManager);
+const complaintsRoutes = createModuleRoutes(
+  "complaints",
+  complaintsTools,
+  toolManager,
+);
 
 export default complaintsRoutes;

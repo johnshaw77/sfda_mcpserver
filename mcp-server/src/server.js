@@ -6,7 +6,11 @@ import databaseService from "./services/database.js";
 import { MCPProtocolHandler } from "./services/mcp-protocol.js";
 import { sseManager } from "./services/sse-manager.js";
 import { registerAllTools, getToolManager } from "./tools/index.js";
-import { registerAllModules, getAllModulesInfo } from "./routes/module-registry.js";
+import {
+  registerAllModules,
+  getAllModulesInfo,
+} from "./routes/module-registry.js";
+import registerLegacyRoutes from "./routes/legacy-routes.js";
 import logMiddleware from "./middleware/logging.js";
 import createLoggingRoutes from "./routes/logging-api.js";
 
@@ -78,28 +82,6 @@ app.get("/health", (req, res) => {
   });
 });
 
-// 工具列表端點 (HTTP API)
-app.get("/tools", (req, res) => {
-  // 調試資訊
-  logger.info("Tools endpoint called", {
-    mcpHandlerToolsSize: mcpHandler.tools.size,
-    toolManagerToolsSize: toolManager.tools.size,
-    mcpHandlerToolNames: Array.from(mcpHandler.tools.keys()),
-    toolManagerToolNames: Array.from(toolManager.tools.keys()),
-  });
-
-  const tools = Array.from(mcpHandler.tools.values()).map(tool => ({
-    name: tool.name,
-    description: tool.description,
-    inputSchema: tool.inputSchema,
-  }));
-
-  res.json({
-    tools: tools,
-    count: tools.length,
-  });
-});
-
 // MCP 協議端點 (JSON-RPC over HTTP)
 app.post("/mcp", async (req, res) => {
   try {
@@ -136,139 +118,15 @@ app.get("/sse/stats", (req, res) => {
   res.json(sseManager.getStats());
 });
 
-// 品質管理 API 路由
-// 現在由 module-registry.js 自動處理
-
-// 通用工具調用函數 (供遺留代碼使用)
-const callToolHandler = async (req, res, module) => {
-  const { toolName } = req.params;
-  const params = req.body;
-
-  try {
-    logger.info(`Calling ${module} tool: ${toolName}`, {
-      module,
-      toolName,
-      params: toolManager._sanitizeParams
-        ? toolManager._sanitizeParams(params)
-        : params,
-    });
-
-    const result = await toolManager.callTool(toolName, params);
-
-    res.json({
-      success: true,
-      module,
-      toolName,
-      result,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    logger.error(`${module} tool failed: ${toolName}`, {
-      module,
-      toolName,
-      error: error.message,
-      type: error.type || "unknown",
-    });
-
-    res.status(400).json({
-      success: false,
-      module,
-      toolName,
-      error: {
-        message: error.message,
-        type: error.type || "execution_error",
-        details: error.details || null,
-      },
-      timestamp: new Date().toISOString(),
-    });
-  }
-};
-
 // 註冊所有模組路由
 registerAllModules(app);
 logger.info("All module routes registered");
 
-// 保留原有的工具測試端點以便向後相容
-app.post("/tools/:toolName", async (req, res) => {
-  const { toolName } = req.params;
-  const params = req.body;
+// 註冊舊版 API 路由（重定向到新格式）
+registerLegacyRoutes(app);
+logger.info("Legacy routes registered for backward compatibility");
 
-  try {
-    logger.info(`Testing tool: ${toolName}`, {
-      toolName,
-      params: toolManager._sanitizeParams
-        ? toolManager._sanitizeParams(params)
-        : params,
-    });
-
-    const result = await toolManager.callTool(toolName, params);
-
-    res.json({
-      success: true,
-      toolName,
-      result,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    logger.error(`Tool test failed: ${toolName}`, {
-      toolName,
-      error: error.message,
-      type: error.type || "unknown",
-    });
-
-    res.status(400).json({
-      success: false,
-      toolName,
-      error: {
-        message: error.message,
-        type: error.type || "execution_error",
-        details: error.details || null,
-      },
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
-
-// 工具統計端點
-app.get("/tools/stats", (req, res) => {
-  const stats = toolManager.getAllToolsStats();
-  res.json(stats);
-});
-
-// 特定工具統計端點
-app.get("/tools/:toolName/stats", (req, res) => {
-  const { toolName } = req.params;
-  const stats = toolManager.getToolStats(toolName);
-
-  if (!stats) {
-    return res.status(404).json({
-      success: false,
-      error: {
-        code: "TOOL_NOT_FOUND",
-        message: `Tool '${toolName}' not found`,
-      },
-    });
-  }
-
-  res.json(stats);
-});
-
-// 工具健康檢查端點
-app.get("/tools/health", (req, res) => {
-  const health = toolManager.healthCheck();
-
-  const statusCode =
-    health.status === "healthy"
-      ? 200
-      : health.status === "degraded"
-        ? 200
-        : 500;
-
-  res.status(statusCode).json(health);
-});
-
-// 品質監控 API 路由
-// app.use("/api/quality", qualityRoutes); // 已由模組註冊器處理
+// 品質監控 API 路由 - 已由模組註冊器處理
 
 // 日誌管理 API 路由
 app.use("/api/logging", createLoggingRoutes(logMiddleware));
@@ -280,14 +138,21 @@ app.get("/", (req, res) => {
     version: "1.0.0",
     endpoints: {
       health: "/health",
-      tools: "/tools",
-      toolTest: "/tools/:toolName",
-      toolStats: "/tools/stats",
-      toolHealth: "/tools/health",
       mcp: "/mcp",
       sse: "/sse",
       sseStats: "/sse/stats",
-      // 新增模組化 API 端點
+      // 統一的工具 API 端點
+      tools: "/api/tools",
+      toolCall: "/api/tools/:toolName",
+      toolStats: "/api/tools/stats",
+      toolSpecificStats: "/api/tools/:toolName/stats",
+      toolHealth: "/api/tools/health",
+      // 舊版端點 (重定向到新格式)
+      legacyTools: "/tools",
+      legacyToolCall: "/tools/:toolName",
+      legacyToolStats: "/tools/stats",
+      legacyToolHealth: "/tools/health",
+      // 模組化 API 端點
       hrApi: "/api/hr/:toolName",
       hrTools: "/api/hr/tools",
       financeApi: "/api/finance/:toolName",
