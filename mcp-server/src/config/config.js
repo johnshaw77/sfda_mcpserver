@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-
+import dbConfig from "./db-config.js";
 // 載入環境變數
 dotenv.config();
 
@@ -18,6 +18,9 @@ const config = {
 
   // 開發配置
   debug: process.env.DEBUG === "true",
+
+  // 資料庫配置
+  dbConfig: dbConfig,
 
   // 取得是否為開發環境
   isDevelopment() {

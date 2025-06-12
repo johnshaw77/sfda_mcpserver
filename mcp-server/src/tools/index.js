@@ -8,6 +8,7 @@ import { toolManager } from "./tool-manager.js";
 import { registerHRTools } from "./hr/index.js";
 import { registerFinanceTools } from "./finance/index.js";
 import { registerTaskManagementTools } from "./task-management/index.js";
+import { getComplaintsTools } from "./complaints/index.js";
 import logger from "../config/logger.js";
 
 /**
@@ -25,6 +26,9 @@ export function registerAllTools() {
 
     // 註冊任務管理工具
     registerTaskManagementToolsInternal();
+
+    // 註冊客訴管理工具
+    registerComplaintsToolsInternal();
 
     const totalTools = toolManager.tools.size;
     logger.info(`Tool registration completed. Total tools: ${totalTools}`);
@@ -70,6 +74,21 @@ function registerTaskManagementToolsInternal() {
   registerTaskManagementTools(toolManager);
 
   logger.info("Task Management tools registered successfully");
+}
+
+/**
+ * 註冊客訴管理工具
+ */
+function registerComplaintsToolsInternal() {
+  logger.info("Registering Complaints tools...");
+
+  // 註冊所有客訴管理工具
+  const complaintsTools = getComplaintsTools();
+  complaintsTools.forEach(tool => {
+    toolManager.registerTool(tool);
+  });
+
+  logger.info("Complaints tools registered successfully");
 }
 
 /**

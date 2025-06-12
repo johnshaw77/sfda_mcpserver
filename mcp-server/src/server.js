@@ -2,10 +2,11 @@ import express from "express";
 import cors from "cors";
 import config from "./config/config.js";
 import logger from "./config/logger.js";
+import databaseService from "./services/database.js";
 import { MCPProtocolHandler } from "./services/mcp-protocol.js";
 import { sseManager } from "./services/sse-manager.js";
 import { registerAllTools, getToolManager } from "./tools/index.js";
-import qualityRoutes from "./api/quality-routes.js";
+import { registerAllModules, getAllModulesInfo } from "./routes/module-registry.js";
 import logMiddleware from "./middleware/logging.js";
 import createLoggingRoutes from "./routes/logging-api.js";
 
@@ -18,6 +19,15 @@ try {
   config.validate();
 } catch (error) {
   logger.error("Configuration validation failed:", error);
+  process.exit(1);
+}
+
+// 初始化資料庫連接
+try {
+  await databaseService.initialize();
+  logger.info("Database initialization completed");
+} catch (error) {
+  logger.error("Database initialization failed:", error);
   process.exit(1);
 }
 
@@ -127,9 +137,9 @@ app.get("/sse/stats", (req, res) => {
 });
 
 // 品質管理 API 路由
-app.use("/api/quality", qualityRoutes);
+// 現在由 module-registry.js 自動處理
 
-// 通用工具調用函數
+// 通用工具調用函數 (供遺留代碼使用)
 const callToolHandler = async (req, res, module) => {
   const { toolName } = req.params;
   const params = req.body;
@@ -174,122 +184,9 @@ const callToolHandler = async (req, res, module) => {
   }
 };
 
-// HR 模組工具列表端點
-app.get("/api/hr/tools", (req, res) => {
-  const hrTools = [
-    "get_employee_info",
-    "get_employee_list",
-    "get_attendance_record",
-    "get_salary_info",
-    "get_department_list",
-  ];
-
-  const allTools = toolManager.getToolsList();
-  const hrToolsWithDetails = allTools.filter(tool =>
-    hrTools.includes(tool.name),
-  );
-
-  res.json({
-    module: "hr",
-    tools: hrToolsWithDetails,
-    count: hrToolsWithDetails.length,
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// HR 模組 API 端點
-app.post("/api/hr/:toolName", async (req, res) => {
-  const hrTools = [
-    "get_employee_info",
-    "get_employee_list",
-    "get_attendance_record",
-    "get_salary_info",
-    "get_department_list",
-  ];
-
-  const { toolName } = req.params;
-  if (!hrTools.includes(toolName)) {
-    return res.status(404).json({
-      success: false,
-      error: {
-        code: "TOOL_NOT_FOUND",
-        message: `HR tool '${toolName}' not found. Available tools: ${hrTools.join(", ")}`,
-      },
-    });
-  }
-
-  await callToolHandler(req, res, "hr");
-});
-
-// Finance 模組工具列表端點
-app.get("/api/finance/tools", (req, res) => {
-  const financeTools = ["get_budget_status"];
-
-  const allTools = toolManager.getToolsList();
-  const financeToolsWithDetails = allTools.filter(tool =>
-    financeTools.includes(tool.name),
-  );
-
-  res.json({
-    module: "finance",
-    tools: financeToolsWithDetails,
-    count: financeToolsWithDetails.length,
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// Finance 模組 API 端點
-app.post("/api/finance/:toolName", async (req, res) => {
-  const financeTools = ["get_budget_status"];
-
-  const { toolName } = req.params;
-  if (!financeTools.includes(toolName)) {
-    return res.status(404).json({
-      success: false,
-      error: {
-        code: "TOOL_NOT_FOUND",
-        message: `Finance tool '${toolName}' not found. Available tools: ${financeTools.join(", ")}`,
-      },
-    });
-  }
-
-  await callToolHandler(req, res, "finance");
-});
-
-// Task Management 模組工具列表端點
-app.get("/api/tasks/tools", (req, res) => {
-  const taskTools = ["create_task", "get_task_list"];
-
-  const allTools = toolManager.getToolsList();
-  const taskToolsWithDetails = allTools.filter(tool =>
-    taskTools.includes(tool.name),
-  );
-
-  res.json({
-    module: "tasks",
-    tools: taskToolsWithDetails,
-    count: taskToolsWithDetails.length,
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// Task Management 模組 API 端點
-app.post("/api/tasks/:toolName", async (req, res) => {
-  const taskTools = ["create_task", "get_task_list"];
-
-  const { toolName } = req.params;
-  if (!taskTools.includes(toolName)) {
-    return res.status(404).json({
-      success: false,
-      error: {
-        code: "TOOL_NOT_FOUND",
-        message: `Task tool '${toolName}' not found. Available tools: ${taskTools.join(", ")}`,
-      },
-    });
-  }
-
-  await callToolHandler(req, res, "tasks");
-});
+// 註冊所有模組路由
+registerAllModules(app);
+logger.info("All module routes registered");
 
 // 保留原有的工具測試端點以便向後相容
 app.post("/tools/:toolName", async (req, res) => {
@@ -371,7 +268,7 @@ app.get("/tools/health", (req, res) => {
 });
 
 // 品質監控 API 路由
-app.use("/api/quality", qualityRoutes);
+// app.use("/api/quality", qualityRoutes); // 已由模組註冊器處理
 
 // 日誌管理 API 路由
 app.use("/api/logging", createLoggingRoutes(logMiddleware));
@@ -410,31 +307,7 @@ app.get("/", (req, res) => {
       loggingSearch: "/api/logging/search",
       loggingFiles: "/api/logging/files/:logType/tail",
     },
-    modules: {
-      hr: {
-        description:
-          "人力資源管理模組，提供員工資訊查詢、出勤記錄、薪資查詢、部門管理等功能",
-        endpoint: "/api/hr/:toolName",
-        tools: [
-          "get_employee_info",
-          "get_employee_list",
-          "get_attendance_record",
-          "get_salary_info",
-          "get_department_list",
-        ],
-      },
-      finance: {
-        description: "財務管理模組，提供預算狀態查詢、財務報表、成本分析等功能",
-        endpoint: "/api/finance/:toolName",
-        tools: ["get_budget_status"],
-      },
-      tasks: {
-        description:
-          "任務管理模組，提供任務創建、列表查詢、狀態追蹤、專案管理等功能",
-        endpoint: "/api/tasks/:toolName",
-        tools: ["create_task", "get_task_list"],
-      },
-    },
+    modules: getAllModulesInfo(),
     mcp: {
       protocolVersion: "2024-11-05",
       supported: true,

@@ -19,11 +19,16 @@ class ToolResultEnforcer:
             "employee_info": [
                 "陳志強", "陳志", "招聘經理", "2020-03-15",
                 "chenzq@company.com", "(02) 2345-6789",
-                "人力資源經理", "HR", "chenzq"
+                "人力資源經理", "chenzq"
+                # 移除單純的 "HR" 關鍵字，因為真實HR部門員工會觸發誤報
             ],
             "generic_fabricated": [
                 "根據我的了解", "據我所知", "通常來說", "一般而言",
                 "可能是", "推測", "估計", "大概", "應該是"
+            ],
+            "specific_fabricated_patterns": [
+                "陳志強.*HR", "陳志強.*人力資源", "陳志強.*招聘",
+                "chenzq@company.com", "2020-03-15.*入職"
             ]
         }
         
@@ -43,6 +48,37 @@ class ToolResultEnforcer:
         """獲取工具執行結果"""
         return self.tool_results.get(call_id, {}).get("result")
     
+    def _is_context_valid(self, indicator: str, response: str, context: Dict[str, Any]) -> bool:
+        """智能檢測：驗證指標是否在正確的上下文中"""
+        
+        # 獲取最近的工具調用結果
+        recent_tool_results = list(self.tool_results.values())[-3:]  # 檢查最近3次調用
+        
+        for tool_result in recent_tool_results:
+            if tool_result["tool_name"] == "get_employee_info":
+                result_data = tool_result["result"]
+                
+                # 如果是成功的員工查詢
+                if (isinstance(result_data, dict) and 
+                    result_data.get("success") and 
+                    "result" in result_data):
+                    
+                    employee_data = result_data["result"]
+                    if isinstance(employee_data, dict) and "data" in employee_data:
+                        dept_info = employee_data["data"].get("department", {})
+                        
+                        # 如果員工真的在HR部門，且指標是"HR"相關，則不算編造
+                        if (indicator == "HR" and 
+                            dept_info.get("departmentCode") == "HR"):
+                            return True
+                            
+                        # 如果員工真的是HR部門，且提到人力資源，則不算編造
+                        if (indicator == "人力資源經理" and 
+                            dept_info.get("departmentName") == "人力資源部"):
+                            return True
+        
+        return False
+    
     def validate_response(self, response: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """驗證回應是否包含編造內容"""
         validation_result = {
@@ -56,12 +92,14 @@ class ToolResultEnforcer:
         for category, indicators in self.fabrication_indicators.items():
             for indicator in indicators:
                 if indicator in response:
-                    validation_result["is_valid"] = False
-                    validation_result["fabricated_content"].append({
-                        "category": category,
-                        "indicator": indicator,
-                        "position": response.find(indicator)
-                    })
+                    # 智能檢測：檢查是否在正確上下文中
+                    if not self._is_context_valid(indicator, response, context):
+                        validation_result["is_valid"] = False
+                        validation_result["fabricated_content"].append({
+                            "category": category,
+                            "indicator": indicator,
+                            "position": response.find(indicator)
+                        })
         
         # 如果發現編造內容，嘗試修正
         if not validation_result["is_valid"]:
