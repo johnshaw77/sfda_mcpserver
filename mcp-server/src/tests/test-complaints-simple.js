@@ -2,7 +2,7 @@
  * 簡單的客訴工具測試
  */
 
-import databaseService from "./src/services/database.js";
+import databaseService from "../services/database.js";
 
 async function testDatabaseQuery() {
   console.log("🔧 測試客訴資料庫查詢...\n");

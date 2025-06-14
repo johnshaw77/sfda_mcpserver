@@ -4,7 +4,7 @@
  * 集中管理所有工具模組，便於在單一文件中查看和修改模組列表
  */
 
-import hybridLogger from "../config/hybrid-logger.js";
+import logger from "../config/logger.js";
 
 // 導入所有模組路由
 import hrRoutes from "./hr-routes.js";
@@ -81,7 +81,7 @@ const moduleRegistry = [
     name: "logging",
     description: "日誌管理模組，提供日誌查詢、統計、等級設定和輪轉功能",
     path: "/api/logs",
-    router: loggingRoutes(hybridLogger),
+    router: loggingRoutes(logger),
     tools: [], // 此模組使用單獨的路由定義
   },
 ];

@@ -18,7 +18,7 @@ const __dirname = path.dirname(__filename);
  */
 class Logger {
   constructor(options = {}) {
-    // 日誌等級定義
+    // 日誌等級定義 - 確保在使用前先定義
     this.levels = {
       error: 0,
       warn: 1,
@@ -27,7 +27,7 @@ class Logger {
       trace: 4,
     };
 
-    // 設定日誌等級
+    // 現在可以安全使用 parseLogLevel 方法
     this.logLevel = this.parseLogLevel(
       options.logLevel || process.env.LOG_LEVEL || "info",
     );
@@ -51,6 +51,7 @@ class Logger {
     if (!level) return "info";
 
     const normalizedLevel = level.toLowerCase();
+    // 使用更健壯的方式檢查日誌等級是否有效
     const validLevels = ["error", "warn", "info", "debug", "trace"];
     return validLevels.includes(normalizedLevel) ? normalizedLevel : "info";
   }
@@ -349,30 +350,6 @@ class Logger {
     await this.writeLog(logEntry, "combined");
   }
 
-  // 兼容舊版 Winston logger 的方法
-  async verbose(message, meta = {}) {
-    return this.trace(message, meta);
-  }
-
-  // 通用日誌方法
-  async log(level, message, meta = {}) {
-    switch (level.toLowerCase()) {
-      case "error":
-        return this.error(message, meta);
-      case "warn":
-        return this.warn(message, meta);
-      case "info":
-        return this.info(message, meta);
-      case "debug":
-        return this.debug(message, meta);
-      case "trace":
-      case "verbose":
-        return this.trace(message, meta);
-      default:
-        return this.info(message, meta);
-    }
-  }
-
   // 特殊用途日誌方法
   async toolCall(toolName, params, result, duration, clientId = null) {
     const logEntry = this.createLogEntry("info", "工具調用", {
@@ -406,33 +383,6 @@ class Logger {
       data,
     });
     await this.writeLog(logEntry, "combined");
-  }
-
-  /**
-   * 記錄工具調用（兼容 base-tool.js 的調用方式）
-   */
-  async logToolCall(logData) {
-    const {
-      toolName,
-      executionId,
-      status,
-      executionTime,
-      resultSize,
-      error,
-      context = {},
-    } = logData;
-
-    return this.info(`工具調用: ${toolName} (${status})`, {
-      category: "tool-call",
-      toolName,
-      executionId,
-      status,
-      duration: executionTime,
-      resultSize,
-      error,
-      clientId: context.userId || context.sessionId,
-      meta: context,
-    });
   }
 
   /**

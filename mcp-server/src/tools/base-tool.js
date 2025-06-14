@@ -11,8 +11,7 @@
  * - 使用統計
  */
 
-import hybridLogger from "../config/hybrid-logger.js";
-import { HybridLogger } from "../config/hybrid-logger.js";
+import logger from "../config/logger.js";
 import { globalToolCache } from "./tool-cache.js";
 import { globalVersionManager } from "./version-manager.js";
 import { globalStatsManager, StatEventType } from "./stats-manager.js";
@@ -193,8 +192,8 @@ export class BaseTool {
       averageExecutionTime: 0,
     };
 
-    // 使用全局混合日誌系統，而不是為每個工具創建新實例
-    this.hybridLogger = hybridLogger;
+    // 使用全局日誌系統
+    this.logger = logger;
 
     // 註冊版本
     globalVersionManager.registerToolVersion(this.name, this.version, {
@@ -320,7 +319,7 @@ export class BaseTool {
 
     try {
       // 記錄工具調用開始 - 混合日誌
-      await this.hybridLogger.logToolCall({
+      await this.logger.logToolCall({
         toolName: this.name,
         executionId,
         params: this._sanitizeParams(params),
@@ -344,7 +343,7 @@ export class BaseTool {
         this.validateInput(params);
       } catch (validationError) {
         // 記錄驗證錯誤
-        await this.hybridLogger.logToolCall({
+        await this.logger.logToolCall({
           toolName: this.name,
           executionId,
           status: "error",
@@ -391,7 +390,7 @@ export class BaseTool {
           fromCache = true;
 
           // 記錄緩存命中
-          await this.hybridLogger.logToolCall({
+          await this.logger.logToolCall({
             toolName: this.name,
             executionId,
             status: "cache_hit",
@@ -412,7 +411,7 @@ export class BaseTool {
           });
         } else {
           // 記錄緩存未命中
-          await this.hybridLogger.logToolCall({
+          await this.logger.logToolCall({
             toolName: this.name,
             executionId,
             status: "cache_miss",
@@ -438,7 +437,7 @@ export class BaseTool {
           this._logExecutionEnd(executionId, ToolStatus.SUCCESS, result);
 
           // 記錄成功執行 - 混合日誌
-          await this.hybridLogger.logToolCall({
+          await this.logger.logToolCall({
             toolName: this.name,
             executionId,
             status: "success",
@@ -476,7 +475,7 @@ export class BaseTool {
           this._logExecutionEnd(executionId, ToolStatus.ERROR, null, error);
 
           // 記錄錯誤執行 - 混合日誌
-          await this.hybridLogger.logToolCall({
+          await this.logger.logToolCall({
             toolName: this.name,
             executionId,
             status: "error",

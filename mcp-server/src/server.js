@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import config from "./config/config.js";
 import logger from "./config/logger.js";
-import hybridLogger from "./config/hybrid-logger.js";
 import {
   loggingMiddleware,
   errorLoggingMiddleware,
@@ -16,8 +15,8 @@ import { registerAllModules } from "./routes/module-registry.js";
 const mcpHandler = new MCPProtocolHandler();
 const toolManager = getToolManager();
 
-// 確保混合日誌系統已初始化
-await hybridLogger.init();
+// 確保日誌系統已初始化
+await logger.init();
 
 // 驗證配置
 try {
@@ -40,14 +39,14 @@ const app = express();
 
 // 中間件設定
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // 混合日誌中間件
-app.use(loggingMiddleware(hybridLogger));
+app.use(loggingMiddleware(logger));
 
 // 錯誤日誌中間件
-app.use(errorLoggingMiddleware(hybridLogger));
+app.use(errorLoggingMiddleware(logger));
 
 // 請求日誌中間件
 app.use((req, res, next) => {
@@ -144,7 +143,7 @@ const callToolHandler = async (req, res, module) => {
 
   try {
     // 記錄工具調用開始
-    hybridLogger.log("info", "工具調用開始", {
+    logger.log("info", "工具調用開始", {
       category: "tool-call",
       module,
       toolName,
@@ -165,7 +164,7 @@ const callToolHandler = async (req, res, module) => {
     const result = await toolManager.callTool(toolName, params);
 
     // 記錄工具調用成功
-    hybridLogger.log("info", "工具調用成功", {
+    logger.log("info", "工具調用成功", {
       category: "tool-call",
       module,
       toolName,
@@ -182,7 +181,7 @@ const callToolHandler = async (req, res, module) => {
     });
   } catch (error) {
     // 記錄工具調用失敗
-    hybridLogger.log("error", "工具調用失敗", {
+    logger.log("error", "工具調用失敗", {
       category: "tool-call",
       module,
       toolName,
@@ -218,7 +217,7 @@ const callToolHandler = async (req, res, module) => {
 // 根路徑
 app.get("/", (req, res) => {
   res.json({
-    message: "MCP Server is running",
+    message: "MCP Server 正在執行中",
     version: "1.0.0",
     endpoints: {
       health: "/health",

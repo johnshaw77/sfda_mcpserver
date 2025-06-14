@@ -4,12 +4,12 @@
  * 測試客訴管理相關的工具功能
  */
 
-import databaseService from "./src/services/database.js";
-import complaintsService from "./src/services/complaints/complaints-service.js";
-import { GetComplaintsListTool } from "./src/tools/complaints/get-complaints-list.js";
-import { GetComplaintDetailTool } from "./src/tools/complaints/get-complaint-detail.js";
-import { GetComplaintsStatisticsTool } from "./src/tools/complaints/get-complaints-statistics.js";
-import config from "./src/config/config.js";
+import databaseService from "../services/database.js";
+import complaintsService from "../services/complaints/complaints-service.js";
+import { GetComplaintsListTool } from "../tools/complaints/get-complaints-list.js";
+import { GetComplaintDetailTool } from "../tools/complaints/get-complaint-detail.js";
+import { GetComplaintsStatisticsTool } from "../tools/complaints/get-complaints-statistics.js";
+import config from "../config/config.js";
 
 class ComplaintsTestRunner {
   constructor() {

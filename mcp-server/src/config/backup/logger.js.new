@@ -409,33 +409,6 @@ class Logger {
   }
 
   /**
-   * 記錄工具調用（兼容 base-tool.js 的調用方式）
-   */
-  async logToolCall(logData) {
-    const {
-      toolName,
-      executionId,
-      status,
-      executionTime,
-      resultSize,
-      error,
-      context = {},
-    } = logData;
-
-    return this.info(`工具調用: ${toolName} (${status})`, {
-      category: "tool-call",
-      toolName,
-      executionId,
-      status,
-      duration: executionTime,
-      resultSize,
-      error,
-      clientId: context.userId || context.sessionId,
-      meta: context,
-    });
-  }
-
-  /**
    * 清理敏感參數
    */
   sanitizeParams(params) {
@@ -633,9 +606,6 @@ const logger = new Logger({
   environment: process.env.NODE_ENV || "development",
   useDatabase: process.env.USE_DATABASE_LOGGING !== "false",
 });
-
-// 為了向後兼容，添加與舊版 Winston logger 相同的方法
-logger.verbose = logger.trace;
 
 // 導出日誌實例
 export default logger;

@@ -1,4 +1,4 @@
-import hybridLogger from "../config/hybrid-logger.js";
+import logger from "../config/logger.js";
 
 /**
  * API 存取日誌中介層
@@ -71,9 +71,9 @@ export const logToolExecution = async (
   const startTime = Date.now();
 
   try {
-    hybridLogger.debug("工具執行開始", {
+    logger.debug("工具執行開始", {
       toolName,
-      params: hybridLogger.sanitizeParams(params),
+      params: logger.sanitizeParams(params),
       clientId,
       category: "tool-start",
     });
@@ -82,7 +82,7 @@ export const logToolExecution = async (
     const duration = Date.now() - startTime;
 
     // 記錄成功的工具調用
-    await hybridLogger.toolCall(toolName, params, result, duration, clientId);
+    await logger.toolCall(toolName, params, result, duration, clientId);
 
     return result;
   } catch (error) {
@@ -90,13 +90,7 @@ export const logToolExecution = async (
     const errorResult = { error: error.message };
 
     // 記錄失敗的工具調用
-    await hybridLogger.toolCall(
-      toolName,
-      params,
-      errorResult,
-      duration,
-      clientId,
-    );
+    await logger.toolCall(toolName, params, errorResult, duration, clientId);
 
     throw error;
   }
@@ -107,7 +101,7 @@ export const logToolExecution = async (
  * 記錄重要的系統事件
  */
 export const logSystemEvent = async (event, data = {}, level = "info") => {
-  await hybridLogger[level](`系統事件: ${event}`, {
+  await logger[level](`系統事件: ${event}`, {
     event,
     data,
     category: "system-event",

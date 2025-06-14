@@ -98,10 +98,10 @@ function analyzeStatusCodes(logs) {
  * - 系統指標和告警管理
  * - 日誌等級設定和輪轉
  *
- * @param {Object} hybridLogger - 混合日誌系統實例
+ * @param {Object} logger - 日誌系統實例
  * @returns {express.Router} Express 路由
  */
-function loggingRoutes(hybridLogger) {
+function loggingRoutes(logger) {
   const router = express.Router();
 
   /**
@@ -110,7 +110,7 @@ function loggingRoutes(hybridLogger) {
    */
   router.get("/stats", async (req, res) => {
     try {
-      const stats = await hybridLogger.getStats();
+      const stats = await logger.getStats();
 
       res.json({
         success: true,
@@ -122,7 +122,7 @@ function loggingRoutes(hybridLogger) {
         },
       });
     } catch (error) {
-      await hybridLogger.error("獲取日誌統計失敗", {
+      await logger.error("獲取日誌統計失敗", {
         error: error.message,
         category: "api-error",
       });
@@ -152,9 +152,9 @@ function loggingRoutes(hybridLogger) {
         });
       }
 
-      hybridLogger.setLogLevel(level);
+      logger.setLogLevel(level);
 
-      await hybridLogger.info("日誌等級已更新", {
+      await logger.info("日誌等級已更新", {
         newLevel: level,
         updatedBy: req.ip,
         category: "config-change",
@@ -164,12 +164,12 @@ function loggingRoutes(hybridLogger) {
         success: true,
         message: `日誌等級已設定為 ${level}`,
         data: {
-          oldLevel: hybridLogger.logLevel,
+          oldLevel: logger.logLevel,
           newLevel: level,
         },
       });
     } catch (error) {
-      await hybridLogger.error("設定日誌等級失敗", {
+      await logger.error("設定日誌等級失敗", {
         error: error.message,
         category: "api-error",
       });
@@ -197,7 +197,7 @@ function loggingRoutes(hybridLogger) {
         offset = 0,
       } = req.query;
 
-      const logs = await hybridLogger.queryLogs({
+      const logs = await logger.queryLogs({
         level,
         category,
         toolName,
@@ -217,7 +217,7 @@ function loggingRoutes(hybridLogger) {
         },
       });
     } catch (error) {
-      await hybridLogger.error("查詢日誌失敗", {
+      await logger.error("查詢日誌失敗", {
         error: error.message,
         query: req.query,
         category: "api-error",
@@ -236,12 +236,12 @@ function loggingRoutes(hybridLogger) {
    */
   router.post("/rotate", async (req, res) => {
     try {
-      await hybridLogger.info("手動觸發日誌輪轉", {
+      await logger.info("手動觸發日誌輪轉", {
         triggeredBy: req.ip,
         category: "maintenance",
       });
 
-      hybridLogger.rotateAllLogs();
+      logger.rotateAllLogs();
 
       res.json({
         success: true,
@@ -249,7 +249,7 @@ function loggingRoutes(hybridLogger) {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      await hybridLogger.error("日誌輪轉失敗", {
+      await logger.error("日誌輪轉失敗", {
         error: error.message,
         category: "api-error",
       });
@@ -311,19 +311,19 @@ function loggingRoutes(hybridLogger) {
       ).toISOString();
 
       // 獲取各種統計資料
-      const errorLogs = await hybridLogger.queryLogs({
+      const errorLogs = await logger.queryLogs({
         level: "error",
         startTime,
         limit: 1000,
       });
 
-      const toolLogs = await hybridLogger.queryLogs({
+      const toolLogs = await logger.queryLogs({
         category: "tool-call",
         startTime,
         limit: 1000,
       });
 
-      const apiLogs = await hybridLogger.queryLogs({
+      const apiLogs = await logger.queryLogs({
         category: "api-access",
         startTime,
         limit: 1000,
@@ -359,7 +359,7 @@ function loggingRoutes(hybridLogger) {
         data: analysis,
       });
     } catch (error) {
-      await hybridLogger.error("日誌分析失敗", {
+      await logger.error("日誌分析失敗", {
         error: error.message,
         category: "api-error",
       });
@@ -460,7 +460,7 @@ function loggingRoutes(hybridLogger) {
     try {
       const { metricName } = req.params;
       const hours = parseInt(req.query.hours) || 24;
-      const trend = await hybridLogger.getMetricTrend(metricName, hours);
+      const trend = await logger.getMetricTrend(metricName, hours);
 
       res.json({
         success: true,
@@ -471,7 +471,7 @@ function loggingRoutes(hybridLogger) {
         },
       });
     } catch (error) {
-      hybridLogger.error("獲取指標趨勢失敗", {
+      logger.error("獲取指標趨勢失敗", {
         error: error.message,
         metricName: req.params.metricName,
       });
@@ -488,7 +488,7 @@ function loggingRoutes(hybridLogger) {
    */
   router.get("/alerts", async (req, res) => {
     try {
-      const alerts = await hybridLogger.getActiveAlerts();
+      const alerts = await logger.getActiveAlerts();
 
       res.json({
         success: true,
@@ -496,7 +496,7 @@ function loggingRoutes(hybridLogger) {
         count: alerts.length,
       });
     } catch (error) {
-      hybridLogger.error("獲取告警清單失敗", { error: error.message });
+      logger.error("獲取告警清單失敗", { error: error.message });
       res.status(500).json({
         success: false,
         error: "獲取告警清單失敗",
@@ -512,19 +512,19 @@ function loggingRoutes(hybridLogger) {
     try {
       const { id } = req.params;
 
-      await hybridLogger.runQuery(
+      await logger.runQuery(
         "UPDATE alert_events SET resolved = 1 WHERE id = ?",
         [id],
       );
 
-      hybridLogger.info("告警已解決", { alertId: id });
+      logger.info("告警已解決", { alertId: id });
 
       res.json({
         success: true,
         message: "告警已標記為已解決",
       });
     } catch (error) {
-      hybridLogger.error("解決告警失敗", {
+      logger.error("解決告警失敗", {
         error: error.message,
         alertId: req.params.id,
       });
@@ -550,14 +550,14 @@ function loggingRoutes(hybridLogger) {
         });
       }
 
-      await hybridLogger.systemMetric(metricName, parseFloat(value), unit);
+      await logger.systemMetric(metricName, parseFloat(value), unit);
 
       res.json({
         success: true,
         message: "系統指標已記錄",
       });
     } catch (error) {
-      hybridLogger.error("記錄系統指標失敗", { error: error.message });
+      logger.error("記錄系統指標失敗", { error: error.message });
       res.status(500).json({
         success: false,
         error: "記錄系統指標失敗",
@@ -587,21 +587,16 @@ function loggingRoutes(hybridLogger) {
         });
       }
 
-      await hybridLogger.alertEvent(
-        alertType,
-        severity,
-        message,
-        details || {},
-      );
+      await logger.alertEvent(alertType, severity, message, details || {});
 
-      hybridLogger.warn("新告警事件", { alertType, severity, message });
+      logger.warn("新告警事件", { alertType, severity, message });
 
       res.json({
         success: true,
         message: "告警事件已建立",
       });
     } catch (error) {
-      hybridLogger.error("建立告警事件失敗", { error: error.message });
+      logger.error("建立告警事件失敗", { error: error.message });
       res.status(500).json({
         success: false,
         error: "建立告警事件失敗",
@@ -616,7 +611,7 @@ function loggingRoutes(hybridLogger) {
   router.get("/tools/stats", async (req, res) => {
     try {
       const hours = parseInt(req.query.hours) || 24;
-      const stats = await hybridLogger.getToolStats(hours);
+      const stats = await logger.getToolStats(hours);
 
       res.json({
         success: true,
@@ -624,7 +619,7 @@ function loggingRoutes(hybridLogger) {
         timeRange: `${hours} 小時`,
       });
     } catch (error) {
-      hybridLogger.error("獲取工具統計失敗", { error: error.message });
+      logger.error("獲取工具統計失敗", { error: error.message });
       res.status(500).json({
         success: false,
         error: "獲取工具統計失敗",
@@ -641,14 +636,14 @@ function loggingRoutes(hybridLogger) {
       const { logType } = req.params;
       const lines = parseInt(req.query.lines) || 100;
 
-      if (!hybridLogger.logFiles || !hybridLogger.logFiles[logType]) {
+      if (!logger.logFiles || !logger.logFiles[logType]) {
         return res.status(404).json({
           success: false,
           error: `日誌類型 ${logType} 不存在`,
         });
       }
 
-      const filePath = hybridLogger.logFiles[logType];
+      const filePath = logger.logFiles[logType];
 
       if (!fs.existsSync(filePath)) {
         return res.json({
@@ -680,7 +675,7 @@ function loggingRoutes(hybridLogger) {
         filePath,
       });
     } catch (error) {
-      hybridLogger.error("讀取檔案日誌失敗", {
+      logger.error("讀取檔案日誌失敗", {
         error: error.message,
         logType: req.params.logType,
       });
@@ -706,14 +701,14 @@ function loggingRoutes(hybridLogger) {
         });
       }
 
-      if (!hybridLogger.logFiles || !hybridLogger.logFiles[logType]) {
+      if (!logger.logFiles || !logger.logFiles[logType]) {
         return res.status(404).json({
           success: false,
           error: `日誌類型 ${logType} 不存在`,
         });
       }
 
-      const filePath = hybridLogger.logFiles[logType];
+      const filePath = logger.logFiles[logType];
 
       if (!fs.existsSync(filePath)) {
         return res.json({
@@ -746,7 +741,7 @@ function loggingRoutes(hybridLogger) {
         searchedLines: logLines.length,
       });
     } catch (error) {
-      hybridLogger.error("搜尋日誌失敗", { error: error.message });
+      logger.error("搜尋日誌失敗", { error: error.message });
       res.status(500).json({
         success: false,
         error: "搜尋日誌失敗",
