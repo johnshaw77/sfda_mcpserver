@@ -1,43 +1,36 @@
-import winston from "winston";
-import config from "../config/config.js";
+/**
+ * 日誌系統包裝器
+ *
+ * 為了確保系統中的日誌統一性，此模組現在作為 hybridLogger 的包裝器
+ * 舊的 Winston 日誌器已被移除，以避免系統中存在兩套日誌系統
+ */
 
-// 定義日誌格式
-const logFormat = winston.format.combine(
-  winston.format.timestamp({
-    format: "YYYY-MM-DD HH:mm:ss",
-  }),
-  winston.format.errors({ stack: true }),
-  winston.format.json(),
-);
+import hybridLogger from "./hybrid-logger.js";
 
-// 建立 Winston Logger
-const logger = winston.createLogger({
-  level: config.logLevel,
-  format: logFormat,
-  defaultMeta: { service: "mcp-server" },
-  transports: [
-    // 控制台輸出
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple(),
-      ),
-    }),
-  ],
-});
-
-// 建立日誌目錄
-import { mkdirSync } from "fs";
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-try {
-  mkdirSync("logs", { recursive: true });
-} catch (error) {
-  // 目錄已存在或無法建立，忽略錯誤
-}
+// 為了向後兼容，我們提供與 Winston 日誌器相同的介面
+const logger = {
+  error: (message, meta = {}) => hybridLogger.error(message, meta),
+  warn: (message, meta = {}) => hybridLogger.warn(message, meta),
+  info: (message, meta = {}) => hybridLogger.info(message, meta),
+  debug: (message, meta = {}) => hybridLogger.debug(message, meta),
+  verbose: (message, meta = {}) => hybridLogger.trace(message, meta),
+  log: (level, message, meta = {}) => {
+    switch (level.toLowerCase()) {
+      case "error":
+        return hybridLogger.error(message, meta);
+      case "warn":
+        return hybridLogger.warn(message, meta);
+      case "info":
+        return hybridLogger.info(message, meta);
+      case "debug":
+        return hybridLogger.debug(message, meta);
+      case "verbose":
+      case "trace":
+        return hybridLogger.trace(message, meta);
+      default:
+        return hybridLogger.info(message, meta);
+    }
+  },
+};
 
 export default logger;

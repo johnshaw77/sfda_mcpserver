@@ -21,7 +21,7 @@ class HybridLogger {
       debug: 3,
       trace: 4,
     };
-
+    
     // 現在可以安全使用 parseLogLevel 方法
     this.logLevel = this.parseLogLevel(
       options.logLevel || process.env.LOG_LEVEL || "info",
@@ -34,17 +34,26 @@ class HybridLogger {
     this.environment =
       options.environment || process.env.NODE_ENV || "development";
     this.useDatabase = options.useDatabase !== false; // 預設啟用資料庫
-
-    // 初始化檔案相關
+      
+    // 初始化部分邏輯從 constructor 移到 init 方法
     this.ensureLogDirectory();
     this.initLogFiles();
+  }
 
-    // 資料庫初始化將在 init() 方法中進行，避免重複初始化
+    // 初始化
+    this.ensureLogDirectory();
+    this.initLogFiles();
+    
+    // 只有在確保非同步操作不在構造函數中執行
+    if (this.useDatabase) {
+      // 在下一個事件循環初始化資料庫，避免構造函數中的非同步操作
+      setTimeout(() => this.initDatabase(), 0);
+    }
   }
 
   parseLogLevel(level) {
     if (!level) return "info";
-
+    
     const normalizedLevel = level.toLowerCase();
     // 使用更健壯的方式檢查日誌等級是否有效
     const validLevels = ["error", "warn", "info", "debug", "trace"];
@@ -113,31 +122,6 @@ class HybridLogger {
         else resolve();
       });
     });
-  }
-
-  /**
-   * 初始化方法，用於在系統啟動時非同步初始化日誌系統
-   * 這個方法可以在 server.js 中被 await 調用
-   */
-  async init() {
-    // 避免重複初始化的標記
-    if (this._initialized) {
-      console.log("📝 混合日誌系統已經初始化過，跳過");
-      return this;
-    }
-
-    // 確保目錄和文件已經正確初始化
-    this.ensureLogDirectory();
-    this.initLogFiles();
-
-    // 初始化資料庫（如果啟用）
-    if (this.useDatabase) {
-      await this.initDatabase();
-      console.log("📝 混合日誌系統已完全初始化");
-    }
-
-    this._initialized = true;
-    return this;
   }
 
   /**
@@ -364,7 +348,7 @@ class HybridLogger {
       method: req.method,
       url: req.url,
       statusCode: res.statusCode,
-      userAgent: req.headers ? req.headers["user-agent"] : undefined,
+      userAgent: req.get("User-Agent"),
       ip: req.ip,
       duration,
     });

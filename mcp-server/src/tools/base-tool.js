@@ -11,11 +11,11 @@
  * - 使用統計
  */
 
-import logger from "../config/logger.js";
+import hybridLogger from "../config/hybrid-logger.js";
+import { HybridLogger } from "../config/hybrid-logger.js";
 import { globalToolCache } from "./tool-cache.js";
 import { globalVersionManager } from "./version-manager.js";
 import { globalStatsManager, StatEventType } from "./stats-manager.js";
-import { HybridLogger } from "../logging/hybrid-logger.js";
 
 /**
  * 工具執行狀態
@@ -193,11 +193,8 @@ export class BaseTool {
       averageExecutionTime: 0,
     };
 
-    // 初始化混合日誌系統
-    this.hybridLogger = new HybridLogger({
-      serviceName: `tool-${this.name}`,
-      logLevel: process.env.LOG_LEVEL || "info",
-    });
+    // 使用全局混合日誌系統，而不是為每個工具創建新實例
+    this.hybridLogger = hybridLogger;
 
     // 註冊版本
     globalVersionManager.registerToolVersion(this.name, this.version, {

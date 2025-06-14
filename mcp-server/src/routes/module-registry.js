@@ -4,6 +4,8 @@
  * 集中管理所有工具模組，便於在單一文件中查看和修改模組列表
  */
 
+import hybridLogger from "../config/hybrid-logger.js";
+
 // 導入所有模組路由
 import hrRoutes from "./hr-routes.js";
 import financeRoutes from "./finance-routes.js";
@@ -11,6 +13,7 @@ import tasksRoutes from "./tasks-routes.js";
 import complaintsRoutes from "./complaints-routes.js";
 import qualityRoutes from "./quality-routes.js";
 import toolsRoutes from "./tools-routes.js";
+import loggingRoutes from "./logging-routes.js";
 
 /**
  * 模組註冊表
@@ -73,6 +76,13 @@ const moduleRegistry = [
     path: "/api/tools",
     router: toolsRoutes,
     tools: [], // 此模組使用單獨的路由定義，涵蓋所有工具
+  },
+  {
+    name: "logging",
+    description: "日誌管理模組，提供日誌查詢、統計、等級設定和輪轉功能",
+    path: "/api/logs",
+    router: loggingRoutes(hybridLogger),
+    tools: [], // 此模組使用單獨的路由定義
   },
 ];
 

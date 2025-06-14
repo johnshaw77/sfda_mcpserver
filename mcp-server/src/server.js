@@ -2,36 +2,28 @@ import express from "express";
 import cors from "cors";
 import config from "./config/config.js";
 import logger from "./config/logger.js";
-import databaseService from "./services/database.js";
+import hybridLogger from "./config/hybrid-logger.js";
+import {
+  loggingMiddleware,
+  errorLoggingMiddleware,
+} from "./middleware/logging.js";
 import { MCPProtocolHandler } from "./services/mcp-protocol.js";
 import { sseManager } from "./services/sse-manager.js";
 import { registerAllTools, getToolManager } from "./tools/index.js";
-import {
-  registerAllModules,
-  getAllModulesInfo,
-} from "./routes/module-registry.js";
-import registerLegacyRoutes from "./routes/legacy-routes.js";
-import logMiddleware from "./middleware/logging.js";
-import createLoggingRoutes from "./routes/logging-api.js";
+import { registerAllModules } from "./routes/module-registry.js";
 
 // 建立 MCP 協議處理器實例
 const mcpHandler = new MCPProtocolHandler();
 const toolManager = getToolManager();
+
+// 確保混合日誌系統已初始化
+await hybridLogger.init();
 
 // 驗證配置
 try {
   config.validate();
 } catch (error) {
   logger.error("Configuration validation failed:", error);
-  process.exit(1);
-}
-
-// 初始化資料庫連接
-try {
-  await databaseService.initialize();
-  logger.info("Database initialization completed");
-} catch (error) {
-  logger.error("Database initialization failed:", error);
   process.exit(1);
 }
 
@@ -44,10 +36,6 @@ try {
   process.exit(1);
 }
 
-// 啟動混合日誌系統健康監控
-logMiddleware.startHealthMonitoring();
-logger.info("Hybrid logging system initialized");
-
 const app = express();
 
 // 中間件設定
@@ -55,10 +43,13 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// 混合日誌中間件 (記錄 API 存取)
-app.use(logMiddleware.accessLogger());
+// 混合日誌中間件
+app.use(loggingMiddleware(hybridLogger));
 
-// 請求日誌中間件 (Winston)
+// 錯誤日誌中間件
+app.use(errorLoggingMiddleware(hybridLogger));
+
+// 請求日誌中間件
 app.use((req, res, next) => {
   logger.info(`${req.method} ${req.path}`, {
     ip: req.ip,
@@ -79,6 +70,31 @@ app.get("/health", (req, res) => {
       initialized: mcpHandler.initialized,
       connections: sseManager.getStats().totalConnections,
     },
+  });
+});
+
+// 舊版工具列表端點
+// 該端點仍保留以支援舊版客戶端
+// 建議使用新版 /api/tools 端點
+app.get("/tools", (req, res) => {
+  // 調試資訊
+  logger.info("Legacy tools endpoint called", {
+    mcpHandlerToolsSize: mcpHandler.tools.size,
+    toolManagerToolsSize: toolManager.tools.size,
+    mcpHandlerToolNames: Array.from(mcpHandler.tools.keys()),
+    toolManagerToolNames: Array.from(toolManager.tools.keys()),
+  });
+
+  const tools = Array.from(mcpHandler.tools.values()).map(tool => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+  }));
+
+  res.json({
+    tools: tools,
+    count: tools.length,
+    note: "This is a legacy endpoint. Please use /api/tools instead.",
   });
 });
 
@@ -118,18 +134,86 @@ app.get("/sse/stats", (req, res) => {
   res.json(sseManager.getStats());
 });
 
-// 註冊所有模組路由
+// 註冊所有模組化路由
 registerAllModules(app);
-logger.info("All module routes registered");
 
-// 註冊舊版 API 路由（重定向到新格式）
-registerLegacyRoutes(app);
-logger.info("Legacy routes registered for backward compatibility");
+// 工具調用日誌記錄
+const callToolHandler = async (req, res, module) => {
+  const { toolName } = req.params;
+  const params = req.body;
 
-// 品質監控 API 路由 - 已由模組註冊器處理
+  try {
+    // 記錄工具調用開始
+    hybridLogger.log("info", "工具調用開始", {
+      category: "tool-call",
+      module,
+      toolName,
+      params: toolManager._sanitizeParams
+        ? toolManager._sanitizeParams(params)
+        : params,
+      user: req.ip,
+    });
 
-// 日誌管理 API 路由
-app.use("/api/logging", createLoggingRoutes(logMiddleware));
+    logger.info(`Calling ${module} tool: ${toolName}`, {
+      module,
+      toolName,
+      params: toolManager._sanitizeParams
+        ? toolManager._sanitizeParams(params)
+        : params,
+    });
+
+    const result = await toolManager.callTool(toolName, params);
+
+    // 記錄工具調用成功
+    hybridLogger.log("info", "工具調用成功", {
+      category: "tool-call",
+      module,
+      toolName,
+      success: true,
+      executionTime: Date.now() - req.startTime,
+    });
+
+    res.json({
+      success: true,
+      module,
+      toolName,
+      result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    // 記錄工具調用失敗
+    hybridLogger.log("error", "工具調用失敗", {
+      category: "tool-call",
+      module,
+      toolName,
+      error: error.message,
+      type: error.type || "unknown",
+      user: req.ip,
+    });
+
+    logger.error(`${module} tool failed: ${toolName}`, {
+      module,
+      toolName,
+      error: error.message,
+      type: error.type || "unknown",
+    });
+
+    res.status(400).json({
+      success: false,
+      module,
+      toolName,
+      error: {
+        message: error.message,
+        type: error.type || "execution_error",
+        details: error.details || null,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// 舊版工具統計與健康檢查端點已被移除
+// 請改用 /api/tools/stats, /api/tools/:toolName/stats 和 /api/tools/health 端點
 
 // 根路徑
 app.get("/", (req, res) => {
@@ -138,41 +222,61 @@ app.get("/", (req, res) => {
     version: "1.0.0",
     endpoints: {
       health: "/health",
+      tools: "/tools",
+      // 統一工具 API 路由
+      toolsApi: "/api/tools",
+      toolStats: "/api/tools/stats",
+      specificToolStats: "/api/tools/:toolName/stats",
+      toolHealth: "/api/tools/health",
       mcp: "/mcp",
       sse: "/sse",
       sseStats: "/sse/stats",
-      // 統一的工具 API 端點
-      tools: "/api/tools",
-      toolCall: "/api/tools/:toolName",
-      toolStats: "/api/tools/stats",
-      toolSpecificStats: "/api/tools/:toolName/stats",
-      toolHealth: "/api/tools/health",
-      // 舊版端點 (重定向到新格式)
-      legacyTools: "/tools",
-      legacyToolCall: "/tools/:toolName",
-      legacyToolStats: "/tools/stats",
-      legacyToolHealth: "/tools/health",
       // 模組化 API 端點
       hrApi: "/api/hr/:toolName",
-      hrTools: "/api/hr/tools",
       financeApi: "/api/finance/:toolName",
-      financeTools: "/api/finance/tools",
       tasksApi: "/api/tasks/:toolName",
-      tasksTools: "/api/tasks/tools",
+      complaintsApi: "/api/complaints/:toolName",
       // 品質監控 API 端點
       qualityOverview: "/api/quality/overview",
       qualityCache: "/api/quality/cache",
       qualityVersions: "/api/quality/versions",
       qualityStats: "/api/quality/stats",
-      // 日誌管理 API 端點
-      loggingStatus: "/api/logging/status",
-      loggingToolStats: "/api/logging/tools/stats",
-      loggingMetrics: "/api/logging/metrics/:metricName",
-      loggingAlerts: "/api/logging/alerts",
-      loggingSearch: "/api/logging/search",
-      loggingFiles: "/api/logging/files/:logType/tail",
+      // 日誌 API 端點
+      logsApi: "/api/logs",
     },
-    modules: getAllModulesInfo(),
+    modules: {
+      hr: {
+        endpoint: "/api/hr/:toolName",
+        tools: [
+          "get_employee_info",
+          "get_employee_list",
+          "get_attendance_record",
+          "get_salary_info",
+          "get_department_list",
+        ],
+      },
+      finance: {
+        endpoint: "/api/finance/:toolName",
+        tools: ["get_budget_status"],
+      },
+      tasks: {
+        endpoint: "/api/tasks/:toolName",
+        tools: ["create_task", "get_task_list"],
+      },
+      complaints: {
+        endpoint: "/api/complaints/:toolName",
+        tools: [
+          "get_complaints_list",
+          "get_complaint_detail",
+          "get_complaints_statistics",
+          "update_complaint_status",
+        ],
+      },
+      tools: {
+        endpoint: "/api/tools/:toolName",
+        description: "統一的工具調用和管理 API",
+      },
+    },
     mcp: {
       protocolVersion: "2024-11-05",
       supported: true,
@@ -193,9 +297,6 @@ app.use((error, req, res, next) => {
     },
   });
 });
-
-// 錯誤處理中介層 (必須在所有路由之後)
-app.use(logMiddleware.errorLogger());
 
 // 404 處理
 app.use((req, res) => {

@@ -1,184 +1,122 @@
-import HybridLogger from "../logging/hybrid-logger.js";
+import hybridLogger from "../config/hybrid-logger.js";
 
 /**
- * 日誌中介層
- * 整合 Winston 和 HybridLogger
+ * API 存取日誌中介層
+ * 記錄所有 HTTP 請求和回應
  */
-class LoggingMiddleware {
-  constructor() {
-    // 初始化混合日誌器
-    this.hybridLogger = new HybridLogger({
-      logLevel: process.env.LOG_LEVEL || "info",
-      serviceName: "mcp-server",
-    });
-  }
+export const loggingMiddleware = logger => (req, res, next) => {
+  const startTime = Date.now();
 
-  /**
-   * API 存取日誌中介層
-   */
-  accessLogger() {
-    return (req, res, next) => {
-      const startTime = Date.now();
+  // 記錄請求開始
+  logger.debug("API 請求開始", {
+    method: req.method,
+    url: req.url,
+    ip: req.ip,
+    userAgent: req.headers["user-agent"],
+    category: "api-request",
+  });
 
-      // 原始 end 方法
-      const originalEnd = res.end;
+  // 覆寫 res.end 來捕獲回應
+  const originalEnd = res.end;
+  res.end = function (...args) {
+    const duration = Date.now() - startTime;
 
-      // 覆蓋 end 方法以記錄響應
-      res.end = function (...args) {
-        const duration = Date.now() - startTime;
-
-        // 記錄到混合日誌系統
-        logMiddleware.hybridLogger.apiAccess(req, res, duration);
-
-        // 調用原始 end 方法
-        originalEnd.apply(this, args);
-      };
-
-      next();
-    };
-  }
-
-  /**
-   * 工具調用日誌
-   */
-  async logToolCall(toolName, params, result, duration, clientId = null) {
-    await this.hybridLogger.toolCall(
-      toolName,
-      params,
-      result,
-      duration,
-      clientId,
-    );
-  }
-
-  /**
-   * 系統指標記錄
-   */
-  async logSystemMetric(metricName, value, unit = null) {
-    await this.hybridLogger.systemMetric(metricName, value, unit);
-  }
-
-  /**
-   * 告警事件記錄
-   */
-  async logAlert(alertType, severity, message, details = {}) {
-    await this.hybridLogger.alertEvent(alertType, severity, message, details);
-  }
-
-  /**
-   * 錯誤處理中介層
-   */
-  errorLogger() {
-    return (err, req, res, next) => {
-      // 記錄到混合日誌系統
-      this.hybridLogger.error("API 錯誤", {
-        error: err.message,
-        stack: err.stack,
+    // 記錄 API 存取
+    logger.apiAccess(
+      {
         method: req.method,
         url: req.url,
         ip: req.ip,
-        userAgent: req.get("User-Agent"),
-      });
+        headers: req.headers,
+      },
+      { statusCode: res.statusCode },
+      duration,
+    );
 
-      // 記錄嚴重錯誤為告警
-      if (err.status >= 500) {
-        this.logAlert("api_error", "high", `伺服器錯誤: ${err.message}`, {
-          method: req.method,
-          url: req.url,
-          stack: err.stack,
-        });
-      }
+    // 呼叫原始的 end 方法
+    originalEnd.apply(this, args);
+  };
 
-      next(err);
-    };
+  next();
+};
+
+/**
+ * 錯誤日誌中介層
+ * 記錄所有未處理的錯誤
+ */
+export const errorLoggingMiddleware = logger => (error, req, res, next) => {
+  logger.error("API 錯誤", {
+    error: error.message,
+    stack: error.stack,
+    method: req.method,
+    url: req.url,
+    ip: req.ip,
+    userAgent: req.headers["user-agent"],
+    category: "api-error",
+  });
+
+  next(error);
+};
+
+/**
+ * 工具調用日誌包裝器
+ * 包裝工具執行來記錄調用情況
+ */
+export const logToolExecution = async (
+  toolName,
+  params,
+  executorFunction,
+  clientId = null,
+) => {
+  const startTime = Date.now();
+
+  try {
+    hybridLogger.debug("工具執行開始", {
+      toolName,
+      params: hybridLogger.sanitizeParams(params),
+      clientId,
+      category: "tool-start",
+    });
+
+    const result = await executorFunction();
+    const duration = Date.now() - startTime;
+
+    // 記錄成功的工具調用
+    await hybridLogger.toolCall(toolName, params, result, duration, clientId);
+
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const errorResult = { error: error.message };
+
+    // 記錄失敗的工具調用
+    await hybridLogger.toolCall(
+      toolName,
+      params,
+      errorResult,
+      duration,
+      clientId,
+    );
+
+    throw error;
   }
+};
 
-  /**
-   * 健康狀態監控
-   */
-  startHealthMonitoring() {
-    // 每分鐘記錄一次系統指標
-    setInterval(async () => {
-      try {
-        const memUsage = process.memoryUsage();
+/**
+ * 系統事件記錄器
+ * 記錄重要的系統事件
+ */
+export const logSystemEvent = async (event, data = {}, level = "info") => {
+  await hybridLogger[level](`系統事件: ${event}`, {
+    event,
+    data,
+    category: "system-event",
+  });
+};
 
-        // 記錄記憶體使用情況
-        await this.logSystemMetric(
-          "memory_heap_used",
-          memUsage.heapUsed / 1024 / 1024,
-          "MB",
-        );
-        await this.logSystemMetric(
-          "memory_heap_total",
-          memUsage.heapTotal / 1024 / 1024,
-          "MB",
-        );
-        await this.logSystemMetric(
-          "memory_external",
-          memUsage.external / 1024 / 1024,
-          "MB",
-        );
-
-        // 記錄 CPU 使用情況 (簡單的進程運行時間)
-        const cpuUsage = process.cpuUsage();
-        await this.logSystemMetric("cpu_user_time", cpuUsage.user / 1000, "ms");
-        await this.logSystemMetric(
-          "cpu_system_time",
-          cpuUsage.system / 1000,
-          "ms",
-        );
-
-        // 檢查記憶體洩漏警告
-        if (memUsage.heapUsed > 500 * 1024 * 1024) {
-          // 500MB
-          await this.logAlert("memory_warning", "medium", "記憶體使用量過高", {
-            heapUsed: memUsage.heapUsed / 1024 / 1024,
-            threshold: 500,
-          });
-        }
-      } catch (error) {
-        console.error("健康監控記錄失敗:", error);
-      }
-    }, 60000); // 每分鐘
-  }
-
-  /**
-   * 獲取日誌統計
-   */
-  getLogStats() {
-    return this.hybridLogger.getLogStats();
-  }
-
-  /**
-   * 獲取工具統計
-   */
-  async getToolStats(hours = 24) {
-    return await this.hybridLogger.getToolStats(hours);
-  }
-
-  /**
-   * 獲取指標趨勢
-   */
-  async getMetricTrend(metricName, hours = 24) {
-    return await this.hybridLogger.getMetricTrend(metricName, hours);
-  }
-
-  /**
-   * 獲取活躍告警
-   */
-  async getActiveAlerts() {
-    return await this.hybridLogger.getActiveAlerts();
-  }
-
-  /**
-   * 清理資源
-   */
-  close() {
-    this.hybridLogger.close();
-  }
-}
-
-// 建立單例實例
-const logMiddleware = new LoggingMiddleware();
-
-export default logMiddleware;
+export default {
+  loggingMiddleware,
+  errorLoggingMiddleware,
+  logToolExecution,
+  logSystemEvent,
+};
