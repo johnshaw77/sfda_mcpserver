@@ -171,6 +171,12 @@ class Logger {
    * 雙重寫入：檔案 + 資料庫
    */
   async writeLog(logEntry, logType = "combined") {
+    // 防護檢查：確保 logEntry 和 level 存在
+    if (!logEntry || !logEntry.level) {
+      console.error("Logger: logEntry 或 level 未定義", logEntry);
+      return;
+    }
+
     if (!this.shouldLog(logEntry.level.toLowerCase())) {
       return;
     }

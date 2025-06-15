@@ -52,3 +52,17 @@ Thumbs.db
 
 /backend/uploads/
 .DS_Store
+
+# Added by Task Master AI
+# Logs
+dev-debug.log
+# Dependency directories
+# Environment variables
+.env
+# Editor directories and files
+.idea
+.vscode
+# OS specific
+# Task files
+tasks.json
+tasks/ 
