@@ -9,11 +9,15 @@ import {
 import { MCPProtocolHandler } from "./services/mcp-protocol.js";
 import { sseManager } from "./services/sse-manager.js";
 import { registerAllTools, getToolManager } from "./tools/index.js";
-import { registerAllModules } from "./routes/module-registry.js";
+import { registerAllRoutes } from "./routes/index.js";
+import databaseService from "./services/database.js";
 
 // 建立 MCP 協議處理器實例
 const mcpHandler = new MCPProtocolHandler();
 const toolManager = getToolManager();
+
+// VPN 保持連線定時器
+let keepAliveTimer = null;
 
 // 確保日誌系統已初始化
 await logger.init();
@@ -34,6 +38,31 @@ try {
   logger.error("Tools registration failed:", error);
   process.exit(1);
 }
+
+// 初始化資料庫服務
+try {
+  await databaseService.initialize();
+  logger.debug("資料庫服務初始化成功");
+} catch (error) {
+  logger.error("資料庫服務初始化失敗，但伺服器將繼續啟動:", error);
+  // 不讓資料庫錯誤阻止服務器啟動，但會記錄錯誤
+}
+
+// 設置定時器保持 VPN 連線 (每3分鐘向 qms 發送簡單查詢)
+keepAliveTimer = setInterval(
+  async () => {
+    try {
+      await databaseService.query("qms", "SELECT id FROM flexium_okr LIMIT 1");
+      logger.debug("VPN keep-alive query executed successfully");
+    } catch (error) {
+      logger.debug("VPN keep-alive query failed:", {
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  },
+  1 * 60 * 1000,
+); // 1分鐘 = 1 * 60 * 1000 毫秒
 
 const app = express();
 
@@ -68,6 +97,13 @@ app.get("/health", (req, res) => {
       protocolVersion: "2024-11-05",
       initialized: mcpHandler.initialized,
       connections: sseManager.getStats().totalConnections,
+    },
+    database: {
+      initialized: databaseService.isInitialized,
+      vpnKeepAlive: {
+        enabled: keepAliveTimer !== null,
+        interval: "1 minute",
+      },
     },
   });
 });
@@ -133,8 +169,24 @@ app.get("/sse/stats", (req, res) => {
   res.json(sseManager.getStats());
 });
 
-// 註冊所有模組化路由
-registerAllModules(app);
+// 註冊所有路由
+try {
+  console.log("正在註冊所有路由...");
+  registerAllRoutes(app, toolManager);
+  console.log("所有路由註冊完成");
+} catch (error) {
+  console.error("路由註冊失敗:", error);
+  logger.error("路由註冊失敗:", error);
+}
+
+// API 404 處理
+app.use("/api/*", (req, res) => {
+  res.status(404).json({
+    error: "API 路徑不存在",
+    message: `找不到路徑 ${req.originalUrl}`,
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // 工具調用日誌記錄
 const callToolHandler = async (req, res, module) => {
@@ -211,9 +263,6 @@ const callToolHandler = async (req, res, module) => {
   }
 };
 
-// 舊版工具統計與健康檢查端點已被移除
-// 請改用 /api/tools/stats, /api/tools/:toolName/stats 和 /api/tools/health 端點
-
 // 根路徑
 app.get("/", (req, res) => {
   res.json({
@@ -230,50 +279,14 @@ app.get("/", (req, res) => {
       mcp: "/mcp",
       sse: "/sse",
       sseStats: "/sse/stats",
-      // 模組化 API 端點
-      hrApi: "/api/hr/:toolName",
-      financeApi: "/api/finance/:toolName",
-      tasksApi: "/api/tasks/:toolName",
-      complaintsApi: "/api/complaints/:toolName",
-      // 品質監控 API 端點
-      qualityOverview: "/api/quality/overview",
-      qualityCache: "/api/quality/cache",
-      qualityVersions: "/api/quality/versions",
-      qualityStats: "/api/quality/stats",
-      // 日誌 API 端點
-      logsApi: "/api/logs",
+      // HR 模組 API 端點
+      hr: "/api/hr",
     },
     modules: {
+      // 只保留 HR 模組
       hr: {
         endpoint: "/api/hr/:toolName",
-        tools: [
-          "get_employee_info",
-          "get_employee_list",
-          "get_attendance_record",
-          "get_salary_info",
-          "get_department_list",
-        ],
-      },
-      finance: {
-        endpoint: "/api/finance/:toolName",
-        tools: ["get_budget_status"],
-      },
-      tasks: {
-        endpoint: "/api/tasks/:toolName",
-        tools: ["create_task", "get_task_list"],
-      },
-      complaints: {
-        endpoint: "/api/complaints/:toolName",
-        tools: [
-          "get_complaints_list",
-          "get_complaint_detail",
-          "get_complaints_statistics",
-          "update_complaint_status",
-        ],
-      },
-      tools: {
-        endpoint: "/api/tools/:toolName",
-        description: "統一的工具調用和管理 API",
+        description: "人資模組 API",
       },
     },
     mcp: {
@@ -309,30 +322,71 @@ app.use((req, res) => {
 });
 
 // 啟動服務器
-const server = app.listen(config.port, () => {
-  logger.info(`MCP Server started on port ${config.port}`, {
-    environment: config.nodeEnv,
-    port: config.port,
+try {
+  console.log(`正在啟動 MCP Server，端口: ${config.port}...`);
+  const server = app.listen(config.port, () => {
+    console.log(`MCP Server 成功啟動，監聽端口: ${config.port}`);
+    logger.info(`MCP Server started on port ${config.port}`, {
+      environment: config.nodeEnv,
+      port: config.port,
+    });
   });
-});
 
-// 優雅關閉
-process.on("SIGTERM", () => {
-  logger.info("SIGTERM received, shutting down gracefully");
-  sseManager.closeAllConnections();
-  server.close(() => {
-    logger.info("Process terminated");
-    process.exit(0);
-  });
-});
+  // 優雅關閉
+  process.on("SIGTERM", async () => {
+    logger.info("SIGTERM received, shutting down gracefully");
 
-process.on("SIGINT", () => {
-  logger.info("SIGINT received, shutting down gracefully");
-  sseManager.closeAllConnections();
-  server.close(() => {
-    logger.info("Process terminated");
-    process.exit(0);
+    // 清理定時器
+    if (keepAliveTimer) {
+      clearInterval(keepAliveTimer);
+      logger.info("Keep-alive timer cleared");
+    }
+
+    // 關閉 SSE 連接
+    sseManager.closeAllConnections();
+
+    // 關閉資料庫連接
+    try {
+      await databaseService.close();
+      logger.info("Database connections closed");
+    } catch (error) {
+      logger.error("Error closing database connections:", error);
+    }
+
+    server.close(() => {
+      logger.info("Process terminated");
+      process.exit(0);
+    });
   });
-});
+
+  process.on("SIGINT", async () => {
+    logger.info("SIGINT received, shutting down gracefully");
+
+    // 清理定時器
+    if (keepAliveTimer) {
+      clearInterval(keepAliveTimer);
+      logger.info("Keep-alive timer cleared");
+    }
+
+    // 關閉 SSE 連接
+    sseManager.closeAllConnections();
+
+    // 關閉資料庫連接
+    try {
+      await databaseService.close();
+      logger.info("Database connections closed");
+    } catch (error) {
+      logger.error("Error closing database connections:", error);
+    }
+
+    server.close(() => {
+      logger.info("Process terminated");
+      process.exit(0);
+    });
+  });
+} catch (error) {
+  console.error("啟動服務器失敗:", error);
+  logger.error("啟動服務器失敗:", error);
+}
 
 export default app;

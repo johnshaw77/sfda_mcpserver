@@ -22,10 +22,12 @@ class DatabaseService {
     if (this.isInitialized) {
       return;
     }
-
     try {
       // 創建 QMS 資料庫連接池
-      console.log("initialize..........", config.dbConfig.qms);
+      console.log("初始化資料庫連接池...");
+      logger.info("初始化資料庫連接池...", {
+        config: JSON.stringify(config.dbConfig.qms),
+      });
       if (config.dbConfig?.qms) {
         const qmsPool = mysql.createPool({
           ...config.dbConfig.qms,
@@ -34,11 +36,16 @@ class DatabaseService {
         });
 
         // 測試連接
+        console.log("嘗試獲取資料庫連接...");
+        logger.info("嘗試獲取資料庫連接...");
         const connection = await qmsPool.getConnection();
+        console.log("成功獲取資料庫連接，執行 ping...");
+        logger.info("成功獲取資料庫連接，執行 ping...");
         await connection.ping();
         connection.release();
 
         this.pools.set("qms", qmsPool);
+        console.log("QMS 資料庫連接池初始化成功");
         logger.info("QMS 資料庫連接池初始化成功", {
           host: config.dbConfig.qms.host,
           database: config.dbConfig.qms.database,
@@ -48,11 +55,24 @@ class DatabaseService {
       this.isInitialized = true;
       logger.info("資料庫服務初始化完成");
     } catch (error) {
+      console.error("資料庫連接失敗:", error.message);
       logger.error("資料庫連接失敗", {
         error: error.message,
         stack: error.stack,
+        timestamp: new Date().toISOString(),
       });
-      throw error;
+
+      // 將錯誤向外拋出，但在開發環境下允許服務器繼續啟動
+      this.connectionError = error;
+      this.isInitialized = false;
+
+      if (process.env.NODE_ENV === "production") {
+        throw error;
+      } else {
+        console.warn(
+          "開發環境：儘管資料庫連接失敗，服務器仍將啟動。某些功能可能不可用。",
+        );
+      }
     }
   }
 

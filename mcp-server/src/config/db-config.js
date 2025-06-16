@@ -1,6 +1,6 @@
 const dbConfig = {
   // 資料庫配置
-  qmslocal: {
+  qms: {
     host: process.env.QMS_LOCAL_DB_HOST || "localhost",
     port: parseInt(process.env.QMS_LOCAL_DB_PORT) || 3306,
     user: process.env.QMS_LOCAL_DB_USER || "root",
@@ -10,7 +10,7 @@ const dbConfig = {
     timezone: "+08:00",
     connectionLimit: 10,
   },
-  qms: {
+  qmsremote: {
     host: process.env.QMS_DB_HOST || "10.1.5.184",
     port: parseInt(process.env.QMS_DB_PORT) || 3306,
     user: process.env.QMS_DB_USER || "qsuser",

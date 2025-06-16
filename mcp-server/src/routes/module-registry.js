@@ -2,16 +2,13 @@
  * 模組註冊器
  *
  * 集中管理所有工具模組，便於在單一文件中查看和修改模組列表
+ * 注意：此文件即將被移除，所有模組已遷移到新的自註冊架構
  */
 
 import logger from "../config/logger.js";
 
 // 導入所有模組路由
 import hrRoutes from "./hr-routes.js";
-import financeRoutes from "./finance-routes.js";
-import tasksRoutes from "./tasks-routes.js";
-import complaintsRoutes from "./complaints-routes.js";
-import qualityRoutes from "./quality-routes.js";
 import toolsRoutes from "./tools-routes.js";
 import loggingRoutes from "./logging-routes.js";
 
@@ -19,7 +16,8 @@ import loggingRoutes from "./logging-routes.js";
  * 模組註冊表
  * 包含所有可用的工具模組及其路由
  *
- * 當添加新模組時，只需在此處註冊即可
+ * 注意：所有模組已遷移到新的自註冊架構，請參考 /docs/hr-module-migration.md
+ * 舊模組將保留一段時間以確保向後兼容，最終將被移除
  */
 const moduleRegistry = [
   {
@@ -28,47 +26,10 @@ const moduleRegistry = [
       "人力資源管理模組，提供員工資訊查詢、出勤記錄、薪資查詢、部門管理等功能",
     path: "/api/hr",
     router: hrRoutes,
-    tools: [
-      "get_employee_info",
-      "get_employee_list",
-      "get_attendance_record",
-      "get_salary_info",
-      "get_department_list",
-    ],
-  },
-  {
-    name: "finance",
-    description: "財務管理模組，提供預算狀態查詢、財務報表、成本分析等功能",
-    path: "/api/finance",
-    router: financeRoutes,
-    tools: ["get_budget_status"],
-  },
-  {
-    name: "tasks",
-    description:
-      "任務管理模組，提供任務創建、列表查詢、狀態追蹤、專案管理等功能",
-    path: "/api/tasks",
-    router: tasksRoutes,
-    tools: ["create_task", "get_task_list"],
-  },
-  {
-    name: "complaints",
-    description: "客訴管理模組，提供客訴查詢、統計、狀態更新等功能",
-    path: "/api/complaints",
-    router: complaintsRoutes,
-    tools: [
-      "get_complaints_list",
-      "get_complaint_detail",
-      "get_complaints_statistics",
-      "update_complaint_status",
-    ],
-  },
-  {
-    name: "quality",
-    description: "品質監控模組，提供工具品質監控、統計、緩存管理等功能",
-    path: "/api/quality",
-    router: qualityRoutes,
-    tools: [], // 此模組使用單獨的路由定義
+    tools: ["get_employee", "search_employees", "get_employee_count"],
+    deprecated: true, // 標記為已棄用
+    migrationNote:
+      "已遷移到新的自註冊架構，請參考 /docs/hr-module-migration.md",
   },
   {
     name: "tools",
@@ -89,11 +50,16 @@ const moduleRegistry = [
 /**
  * 註冊所有模組路由到 Express 應用
  * @param {Express.Application} app - Express 應用實例
+ *
+ * 注意：所有模組已遷移到新的自註冊架構，請參考 /docs/hr-module-migration.md
+ * 此函數將保留一段時間以確保向後兼容，最終將被移除或重構
  */
 export function registerAllModules(app) {
+  logger.warn("使用棄用的模組註冊方法，即將被移除");
+
   moduleRegistry.forEach(module => {
     app.use(module.path, module.router);
-    console.log(`Registered module: ${module.name} at ${module.path}`);
+    console.log(`Registered legacy module: ${module.name} at ${module.path}`);
   });
 }
 
