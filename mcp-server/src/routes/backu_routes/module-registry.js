@@ -5,12 +5,12 @@
  * 注意：此文件即將被移除，所有模組已遷移到新的自註冊架構
  */
 
-import logger from "../config/logger.js";
+import logger from "../../config/logger.js";
 
 // 導入所有模組路由
-import hrRoutes from "./hr-routes.js";
-import toolsRoutes from "./tools-routes.js";
-import loggingRoutes from "./logging-routes.js";
+import hrRoutes from "../hr-routes.js";
+import toolsRoutes from "../tools-routes.js";
+import loggingRoutes from "../logging-routes.js";
 
 /**
  * 模組註冊表

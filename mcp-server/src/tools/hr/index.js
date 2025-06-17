@@ -8,11 +8,29 @@ import { GetEmployeeTool } from "./get-employee.js";
 import { SearchEmployeesTool } from "./search-employees.js";
 import { GetEmployeeCountTool } from "./get-employee-count.js";
 
+// HR 模組名稱
+export const MODULE_NAME = "hr";
+
+// HR 模組元數據
+export const moduleInfo = {
+  name: "人力資源管理哈哈",
+  description: "人力資源管理模組，提供員工資訊查詢、搜尋等功能",
+  endpoint: "/api/hr",
+  icon: "user-group",
+};
+
+// 創建工具實例並設定模組
+const createTool = Tool => {
+  const tool = new Tool();
+  tool.moduleName = MODULE_NAME;
+  return tool;
+};
+
 // 導出所有 HR 工具
 export const hrTools = [
-  new GetEmployeeTool(),
-  new SearchEmployeesTool(),
-  new GetEmployeeCountTool(),
+  createTool(GetEmployeeTool),
+  createTool(SearchEmployeesTool),
+  createTool(GetEmployeeCountTool),
 ];
 
 // 註冊所有 HR 工具的函數

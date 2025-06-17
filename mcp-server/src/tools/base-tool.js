@@ -668,6 +668,8 @@ export class BaseTool {
       cacheable: this.cacheable,
       cacheTTL: this.cacheTTL,
       stats: { ...this.stats },
+      // 新增模組標識，子類可以通過 moduleName 屬性覆蓋
+      module: this.moduleName || "other",
     };
   }
 

@@ -6,6 +6,7 @@
  */
 
 import mysql from "mysql2/promise";
+import sql from "mssql";
 import config from "../config/config.js";
 import logger from "../config/logger.js";
 
@@ -51,6 +52,55 @@ class DatabaseService {
           database: config.dbConfig.qms.database,
         });
       }
+
+      // 初始化 MIL 資料庫連接池 (MSSQL)
+      if (config.dbConfig?.mil) {
+        try {
+          console.log("初始化 MIL 資料庫連接池 (MSSQL)...");
+          logger.info("初始化 MIL 資料庫連接池 (MSSQL)...", {
+            host: config.dbConfig.mil.host,
+            database: config.dbConfig.mil.database,
+          });
+
+          const milPool = new sql.ConnectionPool({
+            server: config.dbConfig.mil.host,
+            user: config.dbConfig.mil.user,
+            password: config.dbConfig.mil.password,
+            database: config.dbConfig.mil.database,
+            port: config.dbConfig.mil.port,
+            options: config.dbConfig.mil.options,
+            pool: {
+              max: config.dbConfig.mil.connectionLimit,
+              min: 0,
+              idleTimeoutMillis: 30000,
+            },
+          });
+
+          // 連接 MSSQL 資料庫
+          await milPool.connect();
+          console.log("MIL 資料庫連接池 (MSSQL) 初始化成功");
+          logger.info("MIL 資料庫連接池 (MSSQL) 初始化成功", {
+            host: config.dbConfig.mil.host,
+            database: config.dbConfig.mil.database,
+          });
+
+          this.pools.set("mil", milPool);
+        } catch (error) {
+          console.error("MIL 資料庫連接失敗:", error.message);
+          logger.error("MIL 資料庫連接失敗", {
+            error: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString(),
+          });
+
+          // 在開發環境下允許繼續，但在生產環境則拋出錯誤
+          if (process.env.NODE_ENV === "production") {
+            throw error;
+          }
+        }
+      }
+
+      // MIL 資料庫連接池代碼已移除
 
       this.isInitialized = true;
       logger.info("資料庫服務初始化完成");
@@ -98,15 +148,31 @@ class DatabaseService {
   async query(dbName, sql, params = []) {
     try {
       const pool = this.getPool(dbName);
-      const [rows, fields] = await pool.execute(sql, params);
 
-      logger.debug("SQL 查詢執行成功", {
-        database: dbName,
-        sql: sql.substring(0, 100) + (sql.length > 100 ? "..." : ""),
-        affectedRows: rows.length,
-      });
+      // 處理不同類型的資料庫
+      if (dbName === "mil") {
+        // MSSQL 查詢
+        const result = await pool.request().query(sql);
 
-      return rows;
+        logger.debug("MSSQL 查詢執行成功", {
+          database: dbName,
+          sql: sql.substring(0, 100) + (sql.length > 100 ? "..." : ""),
+          recordCount: result.recordset ? result.recordset.length : 0,
+        });
+
+        return result.recordset || [];
+      } else {
+        // MySQL 查詢
+        const [rows, fields] = await pool.execute(sql, params);
+
+        logger.debug("MySQL 查詢執行成功", {
+          database: dbName,
+          sql: sql.substring(0, 100) + (sql.length > 100 ? "..." : ""),
+          affectedRows: rows.length,
+        });
+
+        return rows;
+      }
     } catch (error) {
       logger.error("SQL 查詢執行失敗", {
         database: dbName,
@@ -123,9 +189,18 @@ class DatabaseService {
    */
   async beginTransaction(dbName) {
     const pool = this.getPool(dbName);
-    const connection = await pool.getConnection();
-    await connection.beginTransaction();
-    return connection;
+
+    if (dbName === "mil") {
+      // MSSQL 交易處理
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      return transaction;
+    } else {
+      // MySQL 交易處理
+      const connection = await pool.getConnection();
+      await connection.beginTransaction();
+      return connection;
+    }
   }
 
   /**
@@ -134,7 +209,13 @@ class DatabaseService {
   async close() {
     try {
       for (const [name, pool] of this.pools) {
-        await pool.end();
+        if (name === "mil") {
+          // 關閉 MSSQL 連接池
+          await pool.close();
+        } else {
+          // 關閉 MySQL 連接池
+          await pool.end();
+        }
         logger.info(`${name} 資料庫連接池已關閉`);
       }
       this.pools.clear();

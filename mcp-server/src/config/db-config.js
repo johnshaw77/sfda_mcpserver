@@ -32,6 +32,21 @@ const dbConfig = {
     connectionLimit: 10,
     // 移除 acquireTimeout - 改用 waitForConnections 和 queueLimit
   },
+  // MIL 資料庫設定
+  mil: {
+    host: process.env.MIL_DB_HOST || "OA-DB2012.flexium.com.cn",
+    port: parseInt(process.env.MIL_DB_PORT) || 1433, // MSSQL 預設端口
+    user: process.env.MIL_DB_USER || "kduser",
+    password: process.env.MIL_DB_PASSWORD || "kduser.", // 注意密碼中有個句點
+    database: process.env.MIL_DB_NAME || "flexiumoa",
+    options: {
+      encrypt: false, // 如果需要加密連線則設為 true
+      trustServerCertificate: true,
+      enableArithAbort: true,
+      connectTimeout: 30000,
+    },
+    connectionLimit: 10,
+  },
 };
 
 export default dbConfig;

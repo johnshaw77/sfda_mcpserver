@@ -5,7 +5,7 @@ dotenv.config();
 
 const config = {
   // 服務器配置
-  port: process.env.MCP_PORT || 8080,
+  port: process.env.MCP_PORT || 8081,
   nodeEnv: process.env.NODE_ENV || "development",
 
   // API 配置

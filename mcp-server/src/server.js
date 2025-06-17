@@ -8,16 +8,19 @@ import {
 } from "./middleware/logging.js";
 import { MCPProtocolHandler } from "./services/mcp-protocol.js";
 import { sseManager } from "./services/sse-manager.js";
-import { registerAllTools, getToolManager } from "./tools/index.js";
+import {
+  registerAllTools,
+  getToolManager,
+  getRegisteredTools,
+  getAllModuleMetadata,
+  getModuleMetadata,
+} from "./tools/index.js";
 import { registerAllRoutes } from "./routes/index.js";
 import databaseService from "./services/database.js";
 
 // 建立 MCP 協議處理器實例
 const mcpHandler = new MCPProtocolHandler();
 const toolManager = getToolManager();
-
-// VPN 保持連線定時器
-let keepAliveTimer = null;
 
 // 確保日誌系統已初始化
 await logger.init();
@@ -26,16 +29,16 @@ await logger.init();
 try {
   config.validate();
 } catch (error) {
-  logger.error("Configuration validation failed:", error);
+  logger.error("設定驗證失敗:", error);
   process.exit(1);
 }
 
 // 註冊所有工具
 try {
   registerAllTools();
-  logger.info("Tools registration completed");
+  logger.info("工具註冊完成");
 } catch (error) {
-  logger.error("Tools registration failed:", error);
+  logger.error("工具註冊失敗:", error);
   process.exit(1);
 }
 
@@ -47,22 +50,6 @@ try {
   logger.error("資料庫服務初始化失敗，但伺服器將繼續啟動:", error);
   // 不讓資料庫錯誤阻止服務器啟動，但會記錄錯誤
 }
-
-// 設置定時器保持 VPN 連線 (每3分鐘向 qms 發送簡單查詢)
-keepAliveTimer = setInterval(
-  async () => {
-    try {
-      await databaseService.query("qms", "SELECT id FROM flexium_okr LIMIT 1");
-      logger.debug("VPN keep-alive query executed successfully");
-    } catch (error) {
-      logger.debug("VPN keep-alive query failed:", {
-        error: error.message,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  },
-  1 * 60 * 1000,
-); // 1分鐘 = 1 * 60 * 1000 毫秒
 
 const app = express();
 
@@ -98,40 +85,372 @@ app.get("/health", (req, res) => {
       initialized: mcpHandler.initialized,
       connections: sseManager.getStats().totalConnections,
     },
-    database: {
-      initialized: databaseService.isInitialized,
-      vpnKeepAlive: {
-        enabled: keepAliveTimer !== null,
-        interval: "1 minute",
-      },
+  });
+});
+
+// 工具列表端點 (新增)
+app.get("/api/tools", (req, res) => {
+  // 獲取所有工具資訊
+  const tools = getRegisteredTools();
+
+  // 根據工具的 module 屬性進行分組
+  const moduleMap = {};
+
+  // 獲取模組元數據
+  const moduleMetadata = getAllModuleMetadata();
+
+  // 按模組分類工具
+  tools.forEach(tool => {
+    const moduleName = tool.module || "other";
+    if (!moduleMap[moduleName]) {
+      moduleMap[moduleName] = [];
+    }
+    moduleMap[moduleName].push(tool);
+  });
+
+  // 創建按模組分類的工具列表
+  const toolsByModule = {};
+
+  // 遍歷所有模組並添加到結果中
+  Object.keys(moduleMap).forEach(moduleName => {
+    const moduleTools = moduleMap[moduleName];
+    const metadata = moduleMetadata[moduleName] || {
+      name: `${moduleName} 模組`,
+      description: `${moduleName} 模組的工具集`,
+      endpoint: `/api/${moduleName}`,
+    };
+
+    toolsByModule[moduleName] = {
+      name: metadata.name,
+      description: metadata.description,
+      endpoint: metadata.endpoint,
+      toolCount: moduleTools.length,
+      tools: moduleTools,
+    };
+  });
+
+  // 創建一個扁平工具列表（保持向後兼容）
+  const flatToolsList = tools.map(tool => ({
+    name: tool.name,
+    description: tool.description,
+    module: tool.module || "other",
+  }));
+
+  res.json({
+    success: true,
+    toolsByModule: toolsByModule,
+    tools: flatToolsList, // 保留簡化版的工具列表以保持向後兼容 //TODO: 不用相容
+    totalCount: tools.length,
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      allTools: "/api/tools",
+      moduleTools: "/api/modules/:moduleName",
+      toolDetails: "/api/tools/:toolName",
     },
   });
+});
+
+// 模組列表端點 (新增)
+app.get("/api/modules", (req, res) => {
+  // 獲取所有工具資訊
+  const allTools = getRegisteredTools();
+
+  // 獲取所有模組元數據
+  const moduleMetadata = getAllModuleMetadata();
+
+  // 模組清單
+  const modules = [];
+
+  // 處理每個模組
+  for (const [moduleId, metadata] of Object.entries(moduleMetadata)) {
+    // 如果是 "other" 模組且沒有要求顯示，則跳過
+    if (moduleId === "other" && req.query.showOther !== "true") {
+      continue;
+    }
+
+    // 過濾出該模組的工具
+    const moduleTools = allTools.filter(tool => tool.module === moduleId);
+
+    // 構建模組資訊
+    modules.push({
+      name: moduleId,
+      displayName: metadata.name,
+      description: metadata.description,
+      endpoint: metadata.endpoint,
+      tools: moduleTools.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      })),
+      toolsCount: moduleTools.length,
+      apiDocs: `${metadata.endpoint}/docs`,
+    });
+  }
+
+  res.json({
+    success: true,
+    modules: modules,
+    count: modules.length,
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      modulesDetail: "/api/modules/details",
+      specificModule: "/api/modules/:moduleName",
+    },
+  });
+});
+
+// 模組詳細資訊端點 (新增)
+app.get("/api/modules/details", (req, res) => {
+  // 獲取所有工具資訊
+  const allTools = getRegisteredTools();
+
+  // 獲取所有模組元數據
+  const moduleMetadata = getAllModuleMetadata();
+
+  // 模組詳細資訊清單
+  const modulesDetails = [];
+
+  // 處理每個模組
+  for (const [moduleId, metadata] of Object.entries(moduleMetadata)) {
+    // 如果是 "other" 模組且沒有要求顯示，則跳過
+    if (moduleId === "other" && req.query.showOther !== "true") {
+      continue;
+    }
+
+    // 過濾出該模組的工具
+    const moduleTools = allTools.filter(tool => tool.module === moduleId);
+
+    // 構建模組詳細資訊
+    modulesDetails.push({
+      name: moduleId,
+      displayName: metadata.name,
+      description: metadata.description,
+      endpoint: metadata.endpoint,
+      tools: moduleTools,
+      apiEndpoints: {
+        toolsList: `${metadata.endpoint}/tools`,
+        toolInvoke: `${metadata.endpoint}/:toolName`,
+      },
+    });
+  }
+
+  res.json({
+    success: true,
+    modulesDetails: modulesDetails,
+    count: modulesDetails.length,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 特定模組資訊端點 (新增)
+app.get("/api/modules/:moduleName", (req, res) => {
+  const { moduleName } = req.params;
+
+  // 獲取所有工具資訊
+  const allTools = getRegisteredTools();
+
+  // 獲取特定模組的元數據
+  const moduleMetadata = getModuleMetadata(moduleName);
+
+  // 檢查模組是否存在
+  if (!moduleMetadata) {
+    return res.status(404).json({
+      success: false,
+      error: {
+        message: `找不到模組: ${moduleName}`,
+        availableModules: Object.keys(getAllModuleMetadata()),
+      },
+    });
+  }
+
+  // 過濾出該模組的工具
+  const moduleTools = allTools.filter(tool => tool.module === moduleName);
+
+  // 構建模組資訊
+  const moduleInfo = {
+    name: moduleName,
+    displayName: moduleMetadata.name,
+    description: moduleMetadata.description,
+    endpoint: moduleMetadata.endpoint,
+    toolCount: moduleTools.length,
+    tools: moduleTools,
+    apiEndpoints: {
+      toolsList: `${moduleMetadata.endpoint}/tools`,
+      toolInvoke: `${moduleMetadata.endpoint}/:toolName`,
+    },
+  };
+
+  res.json({
+    success: true,
+    module: moduleInfo,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 模組工具文檔端點 (HR)
+app.get("/api/hr/docs", (req, res) => {
+  // 獲取所有工具資訊
+  const allTools = getRegisteredTools();
+
+  // 獲取 HR 模組元數據
+  const moduleMetadata = getModuleMetadata("hr");
+
+  if (!moduleMetadata) {
+    return res.status(404).json({
+      success: false,
+      error: {
+        message: "找不到 HR 模組元數據",
+      },
+    });
+  }
+
+  // 獲取 HR 模組的工具
+  const hrTools = allTools.filter(tool => tool.module === "hr");
+
+  res.json({
+    success: true,
+    module: "hr",
+    name: moduleMetadata.name,
+    description: moduleMetadata.description,
+    toolCount: hrTools.length,
+    tools: hrTools,
+    examples: {
+      get_employee: {
+        description: "查詢指定員工資訊",
+        request: {
+          method: "POST",
+          endpoint: "/api/hr/get_employee",
+          body: {
+            employeeNo: "EMP001",
+          },
+        },
+        response: {
+          success: true,
+          module: "hr",
+          toolName: "get_employee",
+          result: {
+            employeeNo: "EMP001",
+            queryTime: "2025-06-17T08:30:45.123Z",
+            data: {
+              name: "王大明",
+              employee_no: "EMP001",
+              email: "wang.daming@company.com",
+              group_name: "資訊技術部",
+            },
+            fields: ["basic", "contact", "department"],
+          },
+          timestamp: "2025-06-17T08:30:45.168Z",
+        },
+      },
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 模組工具文檔端點 (MIL) - 已移除
+
+// 系統資訊端點 (新增)
+app.get("/api/system/info", (req, res) => {
+  const tools = getRegisteredTools();
+
+  // 獲取所有模組元數據
+  const moduleMetadata = getAllModuleMetadata();
+
+  // 構建模組清單
+  const modules = [];
+
+  // 按模組分組工具
+  const toolsByModule = {};
+
+  // 處理每個模組
+  for (const [moduleId, metadata] of Object.entries(moduleMetadata)) {
+    // 過濾出該模組的工具
+    const moduleTools = tools.filter(tool => tool.module === moduleId);
+
+    // 如果是 "other" 模組且沒有工具，則跳過
+    if (moduleId === "other" && moduleTools.length === 0) {
+      continue;
+    }
+
+    // 保存工具清單
+    toolsByModule[moduleId] = moduleTools.map(t => t.name);
+
+    // 構建模組資訊
+    modules.push({
+      name: moduleId,
+      displayName: metadata.name,
+      description: metadata.description,
+      endpoint: metadata.endpoint,
+      toolCount: moduleTools.length,
+      apiDocs: `${metadata.endpoint}/docs`,
+      apiEndpoints: {
+        tools: `${metadata.endpoint}/tools`,
+        invoke: `${metadata.endpoint}/:toolName`,
+      },
+    });
+  }
+
+  // 系統資訊
+  const systemInfo = {
+    name: "MCP Server",
+    version: "1.0.0",
+    environment: config.nodeEnv,
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    apiEndpoints: {
+      core: {
+        mcp: "/mcp",
+        sse: "/sse",
+        health: "/health",
+      },
+      tools: {
+        list: "/api/tools",
+        stats: "/api/tools/stats",
+        health: "/api/tools/health",
+      },
+      modules: {
+        list: "/api/modules",
+        details: "/api/modules/details",
+        specificModule: "/api/modules/:moduleName",
+      },
+      system: {
+        info: "/api/system/info",
+        health: "/health",
+        stats: "/api/system/stats",
+      },
+    },
+    modules: modules,
+    totalTools: tools.length,
+    toolsGrouped: toolsByModule,
+  };
+
+  res.json(systemInfo);
 });
 
 // 舊版工具列表端點
 // 該端點仍保留以支援舊版客戶端
 // 建議使用新版 /api/tools 端點
-app.get("/tools", (req, res) => {
-  // 調試資訊
-  logger.info("Legacy tools endpoint called", {
-    mcpHandlerToolsSize: mcpHandler.tools.size,
-    toolManagerToolsSize: toolManager.tools.size,
-    mcpHandlerToolNames: Array.from(mcpHandler.tools.keys()),
-    toolManagerToolNames: Array.from(toolManager.tools.keys()),
-  });
+// app.get("/tools", (req, res) => {
+//   // 調試資訊
+//   logger.info("Legacy tools endpoint called", {
+//     mcpHandlerToolsSize: mcpHandler.tools.size,
+//     toolManagerToolsSize: toolManager.tools.size,
+//     mcpHandlerToolNames: Array.from(mcpHandler.tools.keys()),
+//     toolManagerToolNames: Array.from(toolManager.tools.keys()),
+//   });
 
-  const tools = Array.from(mcpHandler.tools.values()).map(tool => ({
-    name: tool.name,
-    description: tool.description,
-    inputSchema: tool.inputSchema,
-  }));
+//   const tools = Array.from(mcpHandler.tools.values()).map(tool => ({
+//     name: tool.name,
+//     description: tool.description,
+//     inputSchema: tool.inputSchema,
+//   }));
 
-  res.json({
-    tools: tools,
-    count: tools.length,
-    note: "This is a legacy endpoint. Please use /api/tools instead.",
-  });
-});
+//   res.json({
+//     tools: tools,
+//     count: tools.length,
+//     note: "This is a legacy endpoint. Please use /api/tools instead.",
+//   });
+// });
 
 // MCP 協議端點 (JSON-RPC over HTTP)
 app.post("/mcp", async (req, res) => {
@@ -159,7 +478,7 @@ app.get("/sse", (req, res) => {
 
   // 可以在這裡發送歡迎訊息
   sseManager.sendToConnection(connectionId, "welcome", {
-    message: "Connected to MCP Server",
+    message: "連線至 MCP Server",
     capabilities: mcpHandler.capabilities,
   });
 });
@@ -188,89 +507,53 @@ app.use("/api/*", (req, res) => {
   });
 });
 
-// 工具調用日誌記錄
-const callToolHandler = async (req, res, module) => {
-  const { toolName } = req.params;
-  const params = req.body;
-
-  try {
-    // 記錄工具調用開始
-    logger.log("info", "工具調用開始", {
-      category: "tool-call",
-      module,
-      toolName,
-      params: toolManager._sanitizeParams
-        ? toolManager._sanitizeParams(params)
-        : params,
-      user: req.ip,
-    });
-
-    logger.info(`Calling ${module} tool: ${toolName}`, {
-      module,
-      toolName,
-      params: toolManager._sanitizeParams
-        ? toolManager._sanitizeParams(params)
-        : params,
-    });
-
-    const result = await toolManager.callTool(toolName, params);
-
-    // 記錄工具調用成功
-    logger.log("info", "工具調用成功", {
-      category: "tool-call",
-      module,
-      toolName,
-      success: true,
-      executionTime: Date.now() - req.startTime,
-    });
-
-    res.json({
-      success: true,
-      module,
-      toolName,
-      result,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    // 記錄工具調用失敗
-    logger.log("error", "工具調用失敗", {
-      category: "tool-call",
-      module,
-      toolName,
-      error: error.message,
-      type: error.type || "unknown",
-      user: req.ip,
-    });
-
-    logger.error(`${module} tool failed: ${toolName}`, {
-      module,
-      toolName,
-      error: error.message,
-      type: error.type || "unknown",
-    });
-
-    res.status(400).json({
-      success: false,
-      module,
-      toolName,
-      error: {
-        message: error.message,
-        type: error.type || "execution_error",
-        details: error.details || null,
-      },
-      timestamp: new Date().toISOString(),
-    });
-  }
-};
-
 // 根路徑
 app.get("/", (req, res) => {
+  // 獲取所有工具資訊
+  const tools = getRegisteredTools();
+
+  // 根據工具的 module 屬性進行分組
+  const moduleMap = {};
+
+  // 獲取模組元數據
+  const moduleMetadata = getAllModuleMetadata();
+
+  // 按模組分類工具
+  tools.forEach(tool => {
+    const moduleName = tool.module || "other";
+    if (!moduleMap[moduleName]) {
+      moduleMap[moduleName] = [];
+    }
+    moduleMap[moduleName].push(tool);
+  });
+
+  // 創建按模組分類的工具列表
+  const toolsByModule = {};
+
+  // 遍歷所有模組並添加到結果中
+  Object.keys(moduleMap).forEach(moduleName => {
+    const moduleTools = moduleMap[moduleName];
+    const metadata = moduleMetadata[moduleName] || {
+      name: `${moduleName} 模組`,
+      description: `${moduleName} 模組的工具集`,
+      endpoint: `/api/${moduleName}`,
+    };
+
+    toolsByModule[moduleName] = {
+      name: metadata.name,
+      description: metadata.description,
+      endpoint: metadata.endpoint,
+      toolCount: moduleTools.length,
+      tools: moduleTools,
+    };
+  });
+
   res.json({
     message: "MCP Server 正在執行中",
     version: "1.0.0",
     endpoints: {
       health: "/health",
-      tools: "/tools",
+      // tools: "/tools",
       // 統一工具 API 路由
       toolsApi: "/api/tools",
       toolStats: "/api/tools/stats",
@@ -281,14 +564,9 @@ app.get("/", (req, res) => {
       sseStats: "/sse/stats",
       // HR 模組 API 端點
       hr: "/api/hr",
+      // MIL 模組 API 端點已移除
     },
-    modules: {
-      // 只保留 HR 模組
-      hr: {
-        endpoint: "/api/hr/:toolName",
-        description: "人資模組 API",
-      },
-    },
+    modules: toolsByModule,
     mcp: {
       protocolVersion: "2024-11-05",
       supported: true,
@@ -335,12 +613,6 @@ try {
   // 優雅關閉
   process.on("SIGTERM", async () => {
     logger.info("SIGTERM received, shutting down gracefully");
-
-    // 清理定時器
-    if (keepAliveTimer) {
-      clearInterval(keepAliveTimer);
-      logger.info("Keep-alive timer cleared");
-    }
 
     // 關閉 SSE 連接
     sseManager.closeAllConnections();
