@@ -167,7 +167,7 @@ async function testMILService() {
               await milService.getMILDetails(firstSerialNumber);
             console.log("✅ getMILDetails 成功！");
             console.log("📝 MIL 詳情摘要:");
-            const details = detailsResult.details;
+            const details = detailsResult.data;
             console.log(`   SerialNumber: ${details.SerialNumber || "N/A"}`);
             console.log(`   Status: ${details.Status || "N/A"}`);
             console.log(`   Proposer_Name: ${details.Proposer_Name || "N/A"}`);
@@ -187,9 +187,9 @@ async function testMILService() {
         const reportResult = await milService.getStatusReport();
         console.log("✅ getStatusReport 成功！");
 
-        if (reportResult.statusReport && reportResult.statusReport.length > 0) {
+        if (reportResult.data && reportResult.data.length > 0) {
           console.log("📝 狀態報告摘要:");
-          reportResult.statusReport.forEach((status, index) => {
+          reportResult.data.forEach((status, index) => {
             console.log(`   ${index + 1}. 狀態: ${status.Status || "N/A"}`);
             console.log(`      數量: ${status.Count || "0"}`);
             console.log(

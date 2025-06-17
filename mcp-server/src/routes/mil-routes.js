@@ -52,11 +52,32 @@ router.post("/:toolName", async (req, res) => {
 
     const result = await toolManager.callTool(toolName, params);
 
+    // 添加調試日誌
+    logger.info(`MIL 工具調用結果:`, {
+      toolName,
+      resultKeys: Object.keys(result || {}),
+      success: result?.success,
+      hasResult: !!result?.result,
+      resultType: typeof result?.result,
+    });
+
+    // 檢查工具執行是否成功
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: "TOOL_EXECUTION_FAILED",
+          message: result.error?.message || "工具執行失敗",
+          details: result.error?.details,
+        },
+      });
+    }
+
     res.json({
       success: true,
       module: "mil",
       toolName: toolName,
-      result: result.data,
+      result: result.result,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

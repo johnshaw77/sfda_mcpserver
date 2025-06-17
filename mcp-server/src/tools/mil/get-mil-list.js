@@ -19,6 +19,11 @@ export class GetMILListTool extends BaseTool {
       {
         type: "object",
         properties: {
+          typeName: {
+            type: "string",
+            description: "MIL 類別(選填) ",
+            example: "三現",
+          },
           status: {
             type: "string",
             description: "MIL 處理狀態（選填）",
@@ -56,7 +61,7 @@ export class GetMILListTool extends BaseTool {
         required: [],
       },
       {
-        cacheable: true,
+        cacheable: false, // 暫時關閉緩存
         cacheExpiry: 60 * 5, // 5 分鐘
       },
     );
@@ -88,7 +93,7 @@ export class GetMILListTool extends BaseTool {
         filters: JSON.stringify(filters),
         page: page,
         limit: limit,
-        count: result.milList.length,
+        count: result.data.length,
         totalRecords: result.totalRecords,
       });
 

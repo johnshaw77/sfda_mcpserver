@@ -98,14 +98,14 @@ async function testMILTools() {
                 `   第一筆: ${result.milList[0].SerialNumber} - ${result.milList[0].Proposer_Name || "N/A"}`,
               );
             }
-          } else if (tool.name === "get-mil-details" && result.details) {
-            console.log(`   SerialNumber: ${result.details.SerialNumber}`);
-            console.log(`   Status: ${result.details.Status || "N/A"}`);
+          } else if (tool.name === "get-mil-details" && result.data) {
+            console.log(`   SerialNumber: ${result.data.SerialNumber}`);
+            console.log(`   Status: ${result.data.Status || "N/A"}`);
             console.log(
-              `   Proposer_Name: ${result.details.Proposer_Name || "N/A"}`,
+              `   Proposer_Name: ${result.data.Proposer_Name || "N/A"}`,
             );
-          } else if (tool.name === "get-status-report" && result.statusReport) {
-            console.log(`   狀態報告包含 ${result.statusReport.length} 種狀態`);
+          } else if (tool.name === "get-status-report" && result.data) {
+            console.log(`   狀態報告包含 ${result.data.length} 種狀態`);
           }
         }
       } catch (error) {

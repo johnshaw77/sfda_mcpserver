@@ -23,6 +23,10 @@ class MILService {
       // 構建 WHERE 條件
       const whereConditions = [];
 
+      // MIL Typename
+      if (filters.typeName) {
+        whereConditions.push("TypeName=@typeName");
+      }
       // MIL 處理狀態篩選
       if (filters.status) {
         whereConditions.push("Status = @status");
@@ -63,7 +67,7 @@ class MILService {
         ORDER BY RecordDate DESC
         OFFSET ${offset} ROWS 
         FETCH NEXT ${limit} ROWS ONLY
-      `;
+              `;
 
       // 建構計數查詢 SQL
       const countQuery = `SELECT COUNT(*) as total FROM v_mil_kd${whereClause}`;
@@ -98,7 +102,7 @@ class MILService {
         limit: limit,
         timestamp: new Date().toISOString(),
         filters: filters,
-        milList: result.recordset,
+        data: result.recordset, // 統一字段
       };
     } catch (error) {
       logger.error("MIL 列表查詢失敗", {
@@ -153,7 +157,7 @@ class MILService {
 
       return {
         timestamp: new Date().toISOString(),
-        details: result.recordset[0],
+        data: result.recordset[0], // 統一字段
       };
     } catch (error) {
       logger.error("MIL 詳情查詢失敗", {
@@ -192,7 +196,7 @@ class MILService {
 
       return {
         timestamp: new Date().toISOString(),
-        statusReport: result.recordset,
+        data: result.recordset, // 統一字段
       };
     } catch (error) {
       logger.error("MIL 狀態報告查詢失敗", {
@@ -227,7 +231,7 @@ class MILService {
 
       return {
         timestamp: new Date().toISOString(),
-        types: result.recordset.map(row => row.TypeName),
+        data: result.recordset.map(row => row.TypeName), // 統一字段
       };
     } catch (error) {
       logger.error("MIL 類型列表查詢失敗", {
