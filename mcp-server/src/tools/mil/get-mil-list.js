@@ -22,12 +22,18 @@ export class GetMILListTool extends BaseTool {
           typeName: {
             type: "string",
             description: "MIL 類別(選填) ",
-            example: "三現",
+            example:
+              "三現,值班幹部巡檢,兩廠資訊處,品質雷達控管,KH MIL,CEO/COO追蹤待辦事項,稽核追蹤,生產入庫進度雷達管控,KS FPC清潔公司,品質ISSUE管理,OQC/IPQC/LAB Issue,A公司MIL,資訊安全稽核,LPA稽核追蹤,會議管理,SmartFactory,廠內Issue,系統稽核類,內部issue管理,LessonLearnt,FPCA第三方稽核",
           },
           status: {
             type: "string",
             description: "MIL 處理狀態（選填）",
             example: "已結案",
+          },
+          proposalFactory: {
+            type: "string",
+            description: "負責人廠別（選填）",
+            example: "JK,KH,KS",
           },
           proposerName: {
             type: "string",

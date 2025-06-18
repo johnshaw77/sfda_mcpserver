@@ -21,6 +21,7 @@ router.get("/tools", (req, res) => {
       "get-mil-details",
       "get-status-report",
       "get-mil-type-list",
+      "get-count-by",
     ],
     timestamp: new Date().toISOString(),
   });
@@ -38,6 +39,7 @@ router.post("/:toolName", async (req, res) => {
       "get-mil-details",
       "get-status-report",
       "get-mil-type-list",
+      "get-count-by",
     ];
 
     if (!validTools.includes(toolName)) {
@@ -165,6 +167,30 @@ router.get("/docs", (req, res) => {
         endpoint: "/api/mil/get-mil-type-list",
         method: "POST",
         parameters: {},
+      },
+      {
+        name: "get-count-by",
+        description:
+          "依指定欄位（如狀態、類型、廠別等）統計 MIL 記錄數量，用於數據分析和報表生成",
+        endpoint: "/api/mil/get-count-by",
+        method: "POST",
+        parameters: {
+          columnName: {
+            type: "string",
+            required: true,
+            description: "要統計的欄位名稱",
+            enum: [
+              "Status",
+              "TypeName",
+              "ProposalFactory",
+              "Proposer_Name",
+              "ResponsibleDepartment",
+              "Priority",
+              "Source",
+            ],
+            examples: ["Status", "TypeName", "ProposalFactory"],
+          },
+        },
       },
     ],
     timestamp: new Date().toISOString(),
