@@ -15,7 +15,41 @@ export class SearchEmployeesTool extends BaseTool {
   constructor() {
     super(
       "search_employees",
-      "根據各種條件搜尋員工，從 org_employee 資料表獲取資料",
+      `根據各種條件搜尋員工資訊，支援多重篩選條件
+
+返回員工欄位說明：
+【基本資訊】
+• emp_no: 員工編號 (公司內部唯一識別碼)
+• name: 員工姓名
+• eng_name: 英文姓名 (可能為空)
+• id_card: 身份證字號 (若 includeDetails=true 才返回)
+
+【組織資訊】
+• group_code: 部門代碼 (如 IT, HR, QA等)
+• group_name: 部門名稱 (如 資訊部, 人力資源部等)
+• title_code: 職位代碼
+• title_name: 職位名稱 (如 工程師, 經理, 主管等)
+
+【聯繫方式】 (需要 includeDetails=true)
+• email: 電子郵件地址
+• phone: 聯繫電話
+• extension: 分機號碼
+
+【狀態資訊】
+• is_suspended: 停用狀態 (0=正常, 1=停用/離職)
+• create_date: 建檔日期
+• update_date: 最後更新日期
+
+【其他資訊】 (需要 includeDetails=true)
+• alias: 員工別名或昵稱
+• remark: 備註說明
+
+搜尋功能特色：
+- 支援姓名模糊查詢
+- 可按部門、職位篩選
+- 可控制返回詳細程度
+- 支援分頁查詢
+- 可篩選在職/離職狀態`,
       {
         type: "object",
         properties: {

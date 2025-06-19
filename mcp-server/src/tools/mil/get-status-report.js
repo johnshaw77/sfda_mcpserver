@@ -15,7 +15,21 @@ export class GetStatusReportTool extends BaseTool {
   constructor() {
     super(
       "get-status-report",
-      "生成 MIL 狀態分布統計報告",
+      `生成 MIL 狀態分布統計報告，提供整體狀態概覽
+
+返回統計欄位說明：
+• Status: 處理狀態名稱
+  - OnGoing: 進行中的 MIL
+  - Completed: 已完成的 MIL  
+  - Cancelled: 已取消的 MIL
+  - 其他自定義狀態
+• Count: 該狀態的 MIL 數量
+• AvgDays: 該狀態 MIL 的平均處理天數 (從記錄日期到當前日期)
+
+用途：
+- 快速了解整體 MIL 處理狀況
+- 分析各狀態的分布比例
+- 評估平均處理時間`,
       {
         type: "object",
         properties: {},

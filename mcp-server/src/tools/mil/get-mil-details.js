@@ -15,7 +15,44 @@ export class GetMILDetailsTool extends BaseTool {
   constructor() {
     super(
       "get-mil-details",
-      "根據 MIL 編號查詢詳細資訊，從 v_mil_kd 視圖獲取資料",
+      `根據 MIL 編號查詢單筆 MIL 的完整詳細資訊
+      
+返回完整欄位說明：
+• SerialNumber: MIL 序號 (如 G250619001)
+• TypeName: MIL 類別 (如 廠內Issue, 品質ISSUE管理, CEO/COO追蹤待辦事項等)
+• MidTypeName: 中層分類
+• DelayDay: 延遲天數 (負數=提前完成，正數=延遲，0=準時)
+• Status: 處理狀態 (OnGoing=進行中, Completed=已完成, Cancelled=已取消)
+• Importance: 重要度 (H=高, M=中, L=低)
+• RecordDate: 記錄日期
+• ProposalFactory: 提案廠別 (JK=JK廠, KH=KH廠, KS=KS廠)
+
+【提案者資訊】
+• Proposer_EmpNo: 提案者員工編號
+• Proposer_Name: 提案者姓名
+• Proposer_Dept: 提案者部門
+• Proposer_Superior_Dept: 提案者上級部門
+
+【負責人資訊】  
+• DRI_EmpNo: DRI負責人員工編號 (Directly Responsible Individual)
+• DRI_EmpName: DRI負責人姓名
+• DRI_Dept: DRI負責部門
+• DRI_Superior_Dept: DRI負責人上級部門
+
+【問題與解決方案】
+• IssueDiscription: 問題詳細描述
+• Location: 發生地點
+• Solution: 解決方案內容
+• Remark: 備註說明
+
+【時程資訊】
+• PlanFinishDate: 計劃完成日期
+• ChangeFinishDate: 變更後完成日期
+• ActualFinishDate: 實際完成日期 (null=尚未完成)
+
+【其他】
+• naqi_num: NAQI 編號
+• is_APPLY: 是否申請標記`,
       {
         type: "object",
         properties: {

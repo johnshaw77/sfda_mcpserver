@@ -5,7 +5,7 @@
  */
 
 import databaseService from "../services/database.js";
-import toolManager from "../tools/tool-manager.js";
+import { toolManager } from "../tools/tool-manager.js";
 
 async function testMILTools() {
   console.log("🔧 測試 MIL 工具功能...\n");
@@ -17,7 +17,7 @@ async function testMILTools() {
 
     // 載入工具清單
     console.log("📋 取得所有工具...");
-    const allTools = toolManager.getAllTools();
+    const allTools = toolManager.getToolsList();
 
     // 篩選出 MIL 工具
     const milTools = allTools.filter(tool => tool.module === "mil");
@@ -55,7 +55,7 @@ async function testMILTools() {
 
           case "get-mil-details":
             // 先取得一個有效的 MIL 編號
-            const listResult = await toolManager.executeTool("get-mil-list", {
+            const listResult = await toolManager.callTool("get-mil-list", {
               limit: 1,
             });
             if (
@@ -83,7 +83,7 @@ async function testMILTools() {
         console.log(`   測試參數: ${JSON.stringify(testParams)}`);
 
         // 執行工具
-        const result = await toolManager.executeTool(tool.name, testParams);
+        const result = await toolManager.callTool(tool.name, testParams);
 
         console.log("✅ 工具執行成功!");
 
