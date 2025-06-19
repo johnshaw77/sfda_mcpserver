@@ -23,9 +23,9 @@ async function testGetMILTypeList() {
     const serviceResult = await milService.getMILTypeList();
 
     console.log("✅ MIL Service 測試成功！");
-    console.log(`   取得 ${serviceResult.types.length} 種 MIL 類型`);
+    console.log(`   取得 ${serviceResult.data.length} 種 MIL 類型`);
     console.log("   MIL 類型列表:");
-    serviceResult.types.forEach((type, index) => {
+    serviceResult.data.forEach((type, index) => {
       console.log(`   ${index + 1}. ${type}`);
     });
 
@@ -45,9 +45,9 @@ async function testGetMILTypeList() {
       if (
         toolResult.result.success &&
         toolResult.result.data &&
-        toolResult.result.data.types
+        toolResult.result.data.data
       ) {
-        console.log(`   類型數量: ${toolResult.result.data.types.length}`);
+        console.log(`   類型數量: ${toolResult.result.data.data.length}`);
       }
     } else {
       console.log("   警告: 工具回傳結構不符合預期");
@@ -57,15 +57,15 @@ async function testGetMILTypeList() {
     console.log("\n🔍 驗證結果一致性...");
     if (
       serviceResult &&
-      serviceResult.types &&
+      serviceResult.data &&
       toolResult &&
       toolResult.result &&
       toolResult.result.success &&
       toolResult.result.data &&
-      toolResult.result.data.types
+      toolResult.result.data.data
     ) {
-      const serviceTypes = serviceResult.types.sort();
-      const toolTypes = toolResult.result.data.types.sort();
+      const serviceTypes = serviceResult.data.sort();
+      const toolTypes = toolResult.result.data.data.sort();
 
       const isConsistent =
         JSON.stringify(serviceTypes) === JSON.stringify(toolTypes);

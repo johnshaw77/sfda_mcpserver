@@ -16,16 +16,26 @@ class MILService {
    * 獲取 MIL 列表
    * @param {Object} filters - 篩選條件
    * @param {number} page - 頁數 (預設為 1)
-   * @param {number} limit - 每頁返回結果數量限制 (預設為 100)
+   * @param {number} limit - 每頁返回結果數量限制 (預設為 20)
+   * @param {string} sort - 排序欄位 (預設為 RecordDate)
    */
-  async getMILList(filters = {}, page = 1, limit = 100) {
+  async getMILList(filters = {}, page = 1, limit = 20, sort = "RecordDate") {
     try {
       // 構建 WHERE 條件
       const whereConditions = [];
 
+      // MIL Typename
+      if (filters.typeName) {
+        whereConditions.push("TypeName=@typeName");
+      }
       // MIL 處理狀態篩選
       if (filters.status) {
         whereConditions.push("Status = @status");
+      }
+
+      // 提案廠別篩選
+      if (filters.proposalFactory) {
+        whereConditions.push("ProposalFactory = @proposalFactory");
       }
 
       // 提出人姓名模糊查詢
@@ -41,6 +51,10 @@ class MILService {
       // 重要度篩選
       if (filters.importance) {
         whereConditions.push("Importance = @importance");
+      }
+
+      if (filters.delayDay) {
+        whereConditions.push("DelayDay >= @delayDay");
       }
 
       // 建構 WHERE 子句
@@ -60,10 +74,10 @@ class MILService {
                ChangeFinishDate, ActualFinishDate, Solution
         FROM v_mil_kd
         ${whereClause}
-        ORDER BY RecordDate DESC
+        ORDER BY ${sort} DESC
         OFFSET ${offset} ROWS 
         FETCH NEXT ${limit} ROWS ONLY
-      `;
+              `;
 
       // 建構計數查詢 SQL
       const countQuery = `SELECT COUNT(*) as total FROM v_mil_kd${whereClause}`;
@@ -98,7 +112,7 @@ class MILService {
         limit: limit,
         timestamp: new Date().toISOString(),
         filters: filters,
-        milList: result.recordset,
+        data: result.recordset, // 統一字段
       };
     } catch (error) {
       logger.error("MIL 列表查詢失敗", {
@@ -153,7 +167,7 @@ class MILService {
 
       return {
         timestamp: new Date().toISOString(),
-        details: result.recordset[0],
+        data: result.recordset[0], // 統一字段
       };
     } catch (error) {
       logger.error("MIL 詳情查詢失敗", {
@@ -192,7 +206,7 @@ class MILService {
 
       return {
         timestamp: new Date().toISOString(),
-        statusReport: result.recordset,
+        data: result.recordset, // 統一字段
       };
     } catch (error) {
       logger.error("MIL 狀態報告查詢失敗", {
@@ -227,10 +241,42 @@ class MILService {
 
       return {
         timestamp: new Date().toISOString(),
-        types: result.recordset.map(row => row.TypeName),
+        data: result.recordset.map(row => row.TypeName), // 統一字段
       };
     } catch (error) {
       logger.error("MIL 類型列表查詢失敗", {
+        error: error.message,
+        stack: error.stack,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 依指定欄位統計 MIL 總數
+   * @tool-name get-count-by
+   * @tool-description 依指定欄位（如狀態、類型、廠別等）統計 MIL 記錄數量，用於數據分析和報表生成
+   * @param {string} columnName - 要統計的欄位名稱（如 Status、TypeName、ProposalFactory 等）
+   * @returns {Object} 包含統計結果的物件
+   */
+  async getCountBy(columnName) {
+    try {
+      const sql = `select ${columnName},count(*) as totalCount from v_mil_kd
+             group by ${columnName}`;
+      const result = await databaseService
+        .getPool(this.dbName)
+        .request()
+        .query(sql);
+      logger.info("MIL 依特定欄位統計查詢成功", {
+        columnCount: result.recordset.length,
+      });
+
+      return {
+        timestamp: new Date().toISOString(),
+        data: result.recordset, // 統一字段
+      };
+    } catch (error) {
+      logger.error("MIL 依特定欄位統計查詢失敗", {
         error: error.message,
         stack: error.stack,
       });

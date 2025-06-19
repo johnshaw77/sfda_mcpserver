@@ -19,10 +19,21 @@ export class GetMILListTool extends BaseTool {
       {
         type: "object",
         properties: {
+          typeName: {
+            type: "string",
+            description: "MIL 類別(選填) ",
+            example:
+              "三現,值班幹部巡檢,兩廠資訊處,品質雷達控管,KH MIL,CEO/COO追蹤待辦事項,稽核追蹤,生產入庫進度雷達管控,KS FPC清潔公司,品質ISSUE管理,OQC/IPQC/LAB Issue,A公司MIL,資訊安全稽核,LPA稽核追蹤,會議管理,SmartFactory,廠內Issue,系統稽核類,內部issue管理,LessonLearnt,FPCA第三方稽核",
+          },
           status: {
             type: "string",
             description: "MIL 處理狀態（選填）",
             example: "已結案",
+          },
+          proposalFactory: {
+            type: "string",
+            description: "負責人廠別（選填）",
+            example: "JK,KH,KS",
           },
           proposerName: {
             type: "string",
@@ -38,6 +49,11 @@ export class GetMILListTool extends BaseTool {
             type: "string",
             description: "重要度（選填）",
             example: "高",
+          },
+          delayDay: {
+            type: "int",
+            description: "延遲天數",
+            example: 10,
           },
           page: {
             type: "integer",
@@ -56,7 +72,7 @@ export class GetMILListTool extends BaseTool {
         required: [],
       },
       {
-        cacheable: true,
+        cacheable: false, // 暫時關閉緩存
         cacheExpiry: 60 * 5, // 5 分鐘
       },
     );
@@ -88,7 +104,7 @@ export class GetMILListTool extends BaseTool {
         filters: JSON.stringify(filters),
         page: page,
         limit: limit,
-        count: result.milList.length,
+        count: result.data.length,
         totalRecords: result.totalRecords,
       });
 

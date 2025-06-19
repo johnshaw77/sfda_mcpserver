@@ -149,19 +149,17 @@ async function testMILAPI() {
           if (response.statusCode === 200) {
             console.log(`✅ 成功取得 MIL 詳情 (${firstSerialNumber})`);
 
-            if (response.body.details) {
+            if (response.body.data) {
               console.log("   MIL 詳情摘要:");
               console.log(
-                `   SerialNumber: ${response.body.details.SerialNumber}`,
+                `   SerialNumber: ${response.body.data.SerialNumber}`,
+              );
+              console.log(`   Status: ${response.body.data.Status || "N/A"}`);
+              console.log(
+                `   Proposer_Name: ${response.body.data.Proposer_Name || "N/A"}`,
               );
               console.log(
-                `   Status: ${response.body.details.Status || "N/A"}`,
-              );
-              console.log(
-                `   Proposer_Name: ${response.body.details.Proposer_Name || "N/A"}`,
-              );
-              console.log(
-                `   RecordDate: ${response.body.details.RecordDate ? new Date(response.body.details.RecordDate).toLocaleString() : "N/A"}`,
+                `   RecordDate: ${response.body.data.RecordDate ? new Date(response.body.data.RecordDate).toLocaleString() : "N/A"}`,
               );
             }
           } else {
@@ -184,11 +182,11 @@ async function testMILAPI() {
     if (response.statusCode === 200) {
       console.log("✅ 成功取得 MIL 狀態報告");
 
-      if (response.body.statusReport && response.body.statusReport.length > 0) {
-        console.log(`   共有 ${response.body.statusReport.length} 種狀態`);
+      if (response.body.data && response.body.data.length > 0) {
+        console.log(`   共有 ${response.body.data.length} 種狀態`);
         console.log("   狀態報告摘要:");
 
-        response.body.statusReport.forEach((status, index) => {
+        response.body.data.forEach((status, index) => {
           console.log(`   ${index + 1}. 狀態: ${status.Status || "N/A"}`);
           console.log(`      數量: ${status.Count || "0"}`);
           console.log(

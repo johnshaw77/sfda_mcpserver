@@ -40,7 +40,7 @@ export class GetMILTypeListTool extends BaseTool {
       // 記錄執行資訊
       logger.info("MIL 類型列表查詢成功", {
         toolName: this.name,
-        typeCount: result.types.length,
+        typeCount: result.data.length,
       });
 
       return {

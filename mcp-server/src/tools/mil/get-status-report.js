@@ -40,7 +40,7 @@ export class GetStatusReportTool extends BaseTool {
       // 記錄執行資訊
       logger.info("MIL 狀態報告生成成功", {
         toolName: this.name,
-        reportCount: result.statusReport.length,
+        reportCount: result.data.length,
       });
 
       return {

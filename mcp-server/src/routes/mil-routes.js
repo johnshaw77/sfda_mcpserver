@@ -21,6 +21,7 @@ router.get("/tools", (req, res) => {
       "get-mil-details",
       "get-status-report",
       "get-mil-type-list",
+      "get-count-by",
     ],
     timestamp: new Date().toISOString(),
   });
@@ -38,6 +39,7 @@ router.post("/:toolName", async (req, res) => {
       "get-mil-details",
       "get-status-report",
       "get-mil-type-list",
+      "get-count-by",
     ];
 
     if (!validTools.includes(toolName)) {
@@ -52,11 +54,32 @@ router.post("/:toolName", async (req, res) => {
 
     const result = await toolManager.callTool(toolName, params);
 
+    // 添加調試日誌
+    logger.info(`MIL 工具調用結果:`, {
+      toolName,
+      resultKeys: Object.keys(result || {}),
+      success: result?.success,
+      hasResult: !!result?.result,
+      resultType: typeof result?.result,
+    });
+
+    // 檢查工具執行是否成功
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: "TOOL_EXECUTION_FAILED",
+          message: result.error?.message || "工具執行失敗",
+          details: result.error?.details,
+        },
+      });
+    }
+
     res.json({
       success: true,
       module: "mil",
       toolName: toolName,
-      result: result.data,
+      result: result.result,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -144,6 +167,30 @@ router.get("/docs", (req, res) => {
         endpoint: "/api/mil/get-mil-type-list",
         method: "POST",
         parameters: {},
+      },
+      {
+        name: "get-count-by",
+        description:
+          "依指定欄位（如狀態、類型、廠別等）統計 MIL 記錄數量，用於數據分析和報表生成",
+        endpoint: "/api/mil/get-count-by",
+        method: "POST",
+        parameters: {
+          columnName: {
+            type: "string",
+            required: true,
+            description: "要統計的欄位名稱",
+            enum: [
+              "Status",
+              "TypeName",
+              "ProposalFactory",
+              "Proposer_Name",
+              "ResponsibleDepartment",
+              "Priority",
+              "Source",
+            ],
+            examples: ["Status", "TypeName", "ProposalFactory"],
+          },
+        },
       },
     ],
     timestamp: new Date().toISOString(),
