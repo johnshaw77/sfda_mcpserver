@@ -49,7 +49,7 @@ async function testGetCountBy() {
       // 檢查 toolResult 的結構並適配
       let success = false;
       let data = null;
-      
+
       if (toolResult && toolResult.result) {
         success = toolResult.result.success;
         data = toolResult.result.data;

@@ -53,6 +53,10 @@ class MILService {
         whereConditions.push("Importance = @importance");
       }
 
+      if (filters.delayDay) {
+        whereConditions.push("DelayDay >= @delayDay");
+      }
+
       // 建構 WHERE 子句
       const whereClause =
         whereConditions.length > 0

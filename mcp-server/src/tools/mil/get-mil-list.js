@@ -50,6 +50,11 @@ export class GetMILListTool extends BaseTool {
             description: "重要度（選填）",
             example: "高",
           },
+          delayDay: {
+            type: "int",
+            description: "延遲天數",
+            example: 10,
+          },
           page: {
             type: "integer",
             description: "頁數（選填，預設 1）",

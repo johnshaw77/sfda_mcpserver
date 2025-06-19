@@ -23,16 +23,16 @@ async function testMILCountByFeature() {
     const testFieldGroups = [
       {
         name: "狀態相關欄位",
-        fields: ["Status", "Importance"]
+        fields: ["Status", "Importance"],
       },
       {
-        name: "組織相關欄位", 
-        fields: ["ProposalFactory", "Proposer_Dept"]
+        name: "組織相關欄位",
+        fields: ["ProposalFactory", "Proposer_Dept"],
       },
       {
         name: "責任相關欄位",
-        fields: ["DRI_Dept", "Location"]
-      }
+        fields: ["DRI_Dept", "Location"],
+      },
     ];
 
     let totalTests = 0;
@@ -44,34 +44,42 @@ async function testMILCountByFeature() {
 
       for (const columnName of group.fields) {
         totalTests++;
-        
+
         try {
           console.log(`\n📋 測試欄位: ${columnName}`);
-          
+
           // 1. 測試 MIL Service 方法
           console.log(`   🔧 執行 MIL Service - getCountBy(${columnName})...`);
           const serviceResult = await milService.getCountBy(columnName);
-          
+
           console.log(`   ✅ Service 執行成功`);
           console.log(`   📊 統計結果: ${serviceResult.data.length} 個不同值`);
-          
+
           // 顯示統計結果摘要
-          const totalRecords = serviceResult.data.reduce((sum, item) => sum + item.totalCount, 0);
+          const totalRecords = serviceResult.data.reduce(
+            (sum, item) => sum + item.totalCount,
+            0,
+          );
           console.log(`   📈 總記錄數: ${totalRecords.toLocaleString()} 筆`);
-          
+
           // 顯示前3項結果
           if (serviceResult.data.length > 0) {
             console.log(`   🔝 前3項結果:`);
             serviceResult.data.slice(0, 3).forEach((item, index) => {
-              const value = item[columnName] === null ? 'null' : item[columnName];
-              console.log(`      ${index + 1}. ${value}: ${item.totalCount.toLocaleString()} 筆`);
+              const value =
+                item[columnName] === null ? "null" : item[columnName];
+              console.log(
+                `      ${index + 1}. ${value}: ${item.totalCount.toLocaleString()} 筆`,
+              );
             });
           }
 
           // 2. 測試 Tool Manager
           console.log(`   🔧 執行 Tool Manager - get-count-by...`);
           const toolManager = getToolManager();
-          const toolResult = await toolManager.callTool("get-count-by", { columnName });
+          const toolResult = await toolManager.callTool("get-count-by", {
+            columnName,
+          });
 
           if (toolResult && toolResult.success && toolResult.data) {
             console.log(`   ✅ Tool 執行成功`);
@@ -81,19 +89,22 @@ async function testMILCountByFeature() {
             const serviceCount = serviceResult.data.length;
             const toolCount = toolResult.data.data.length;
             const isConsistent = serviceCount === toolCount;
-            
-            console.log(`   🔍 結果一致性: ${isConsistent ? "✅ 一致" : "❌ 不一致"}`);
-            
+
+            console.log(
+              `   🔍 結果一致性: ${isConsistent ? "✅ 一致" : "❌ 不一致"}`,
+            );
+
             if (isConsistent) {
               successTests++;
               console.log(`   🎯 測試通過`);
             } else {
-              console.log(`   ⚠️  警告: Service(${serviceCount}) vs Tool(${toolCount})`);
+              console.log(
+                `   ⚠️  警告: Service(${serviceCount}) vs Tool(${toolCount})`,
+              );
             }
           } else {
             console.log(`   ❌ Tool 執行失敗`);
           }
-
         } catch (fieldError) {
           console.log(`   ❌ 測試失敗: ${fieldError.message}`);
         }
@@ -106,14 +117,15 @@ async function testMILCountByFeature() {
     console.log(`   總測試數: ${totalTests}`);
     console.log(`   成功測試: ${successTests}`);
     console.log(`   失敗測試: ${totalTests - successTests}`);
-    console.log(`   成功率: ${((successTests / totalTests) * 100).toFixed(1)}%`);
+    console.log(
+      `   成功率: ${((successTests / totalTests) * 100).toFixed(1)}%`,
+    );
 
     if (successTests === totalTests) {
       console.log(`\n🎊 所有測試通過！getCountBy 功能運作正常！`);
     } else {
       console.log(`\n⚠️  部分測試失敗，請檢查相關功能`);
     }
-
   } catch (error) {
     console.error("❌ 測試執行失敗:", error.message);
     console.error("錯誤詳情:", error);
