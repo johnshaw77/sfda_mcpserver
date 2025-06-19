@@ -5,11 +5,12 @@ dotenv.config();
 
 const config = {
   // 服務器配置
-  port: process.env.MCP_PORT || 8081,
+  port: process.env.MCP_PORT || 8080,
   nodeEnv: process.env.NODE_ENV || "development",
 
-  // API 配置
-  mainSystemUrl: process.env.MAIN_SYSTEM_URL || "http://localhost:3000/api/mcp",
+  // API 配置 (TODO: 待確認是否需要)
+  mainSystemUrl:
+    process.env.MAIN_SYSTEM_URL || "http://10.8.38.110:3000/api/mcp",
   apiTimeout: parseInt(process.env.API_TIMEOUT) || 30000,
 
   // 日誌配置
