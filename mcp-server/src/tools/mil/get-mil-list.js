@@ -15,7 +15,24 @@ export class GetMILListTool extends BaseTool {
   constructor() {
     super(
       "get-mil-list",
-      "根據條件查詢 MIL 列表(分配到清單上的任務或專案)",
+      `根據條件查詢 MIL 列表(分配到清單上的任務或專案)
+      
+返回欄位說明：
+• SerialNumber: MIL 序號 (如 G250619001)
+• DelayDay: 延遲天數 (負數=提前完成，正數=延遲，0=準時)
+• Status: 處理狀態 (OnGoing=進行中, Completed=已完成, Cancelled=已取消)
+• DRI_EmpName: DRI負責人姓名 (Directly Responsible Individual)
+• DRI_Dept: DRI負責部門
+• Proposer_Name: 提案者姓名
+• Proposer_Dept: 提案者部門
+• IssueDiscription: 問題描述內容
+• PlanFinishDate: 計劃完成日期
+• ActualFinishDate: 實際完成日期 (null=尚未完成)
+• Importance: 重要度 (H=高, M=中, L=低)
+• TypeName: MIL類別 (如 廠內Issue, 品質ISSUE管理等)
+• ProposalFactory: 提案廠別 (JK/KH/KS)
+• Location: 發生地點
+• Solution: 解決方案`,
       {
         type: "object",
         properties: {
@@ -50,10 +67,15 @@ export class GetMILListTool extends BaseTool {
             description: "重要度（選填）",
             example: "高",
           },
-          delayDay: {
-            type: "int",
-            description: "延遲天數",
-            example: 10,
+          delayDayMin: {
+            type: "integer",
+            description: "最小延遲天數（選填）- 查詢延遲天數大於等於此值的 MIL",
+            example: 5,
+          },
+          delayDayMax: {
+            type: "integer",
+            description: "最大延遲天數（選填）- 查詢延遲天數小於等於此值的 MIL",
+            example: 30,
           },
           page: {
             type: "integer",
@@ -86,10 +108,17 @@ export class GetMILListTool extends BaseTool {
     try {
       // 參數處理
       const filters = {};
+      if (params.typeName) filters.typeName = params.typeName;
       if (params.status) filters.status = params.status;
+      if (params.proposalFactory)
+        filters.proposalFactory = params.proposalFactory;
       if (params.proposerName) filters.proposerName = params.proposerName;
       if (params.serialNumber) filters.serialNumber = params.serialNumber;
       if (params.importance) filters.importance = params.importance;
+      if (params.delayDayMin !== undefined)
+        filters.delayDayMin = params.delayDayMin;
+      if (params.delayDayMax !== undefined)
+        filters.delayDayMax = params.delayDayMax;
 
       // 分頁參數
       const page = params.page || 1;

@@ -53,7 +53,15 @@ class MILService {
         whereConditions.push("Importance = @importance");
       }
 
-      if (filters.delayDay) {
+      // 延遲天數範圍篩選
+      if (filters.delayDayMin !== undefined) {
+        whereConditions.push("DelayDay >= @delayDayMin");
+      }
+      if (filters.delayDayMax !== undefined) {
+        whereConditions.push("DelayDay <= @delayDayMax");
+      }
+      // 向後兼容舊的 delayDay 參數
+      if (filters.delayDay !== undefined) {
         whereConditions.push("DelayDay >= @delayDay");
       }
 
@@ -129,8 +137,16 @@ class MILService {
    * @param {Object} filters - 篩選條件
    */
   setQueryParameters(request, filters) {
+    if (filters.typeName) {
+      request.input("typeName", filters.typeName);
+    }
+
     if (filters.status) {
       request.input("status", filters.status);
+    }
+
+    if (filters.proposalFactory) {
+      request.input("proposalFactory", filters.proposalFactory);
     }
 
     if (filters.proposerName) {
@@ -143,6 +159,18 @@ class MILService {
 
     if (filters.importance) {
       request.input("importance", filters.importance);
+    }
+
+    // 延遲天數範圍參數
+    if (filters.delayDayMin !== undefined) {
+      request.input("delayDayMin", filters.delayDayMin);
+    }
+    if (filters.delayDayMax !== undefined) {
+      request.input("delayDayMax", filters.delayDayMax);
+    }
+    // 向後兼容
+    if (filters.delayDay !== undefined) {
+      request.input("delayDay", filters.delayDay);
     }
   }
 
