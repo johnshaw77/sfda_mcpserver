@@ -55,6 +55,8 @@ uv pip install -r requirements.txt
 
 ```bash
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+cd "d:\@Projects\sfda_mcpserver\sfda_stat"; .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 ### 3. 存取 API 文件

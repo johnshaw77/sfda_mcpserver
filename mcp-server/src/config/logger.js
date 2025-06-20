@@ -72,7 +72,33 @@ class Logger {
 
   async initDatabase() {
     try {
-      this.db = new sqlite3.Database(this.dbPath);
+      // 使用 WAL 模式和連接池來避免鎖定問題
+      this.db = new sqlite3.Database(
+        this.dbPath,
+        sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE,
+        err => {
+          if (err) {
+            console.error("❌ 資料庫連接失敗:", err);
+            this.useDatabase = false;
+            return;
+          }
+
+          // 設定 WAL 模式以減少鎖定問題
+          this.db.run("PRAGMA journal_mode=WAL;", err => {
+            if (err) {
+              console.warn("⚠️ 無法設定 WAL 模式:", err.message);
+            }
+          });
+
+          // 設定忙碌超時時間
+          this.db.run("PRAGMA busy_timeout=10000;", err => {
+            if (err) {
+              console.warn("⚠️ 無法設定忙碌超時:", err.message);
+            }
+          });
+        },
+      );
+
       await this.createTables();
       console.log("✅ SQLite 日誌資料庫已初始化");
     } catch (error) {
@@ -245,9 +271,21 @@ class Logger {
     ];
 
     return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function (err) {
-        if (err) reject(err);
-        else resolve(this.lastID);
+      // 使用序列化來避免併發寫入問題
+      this.db.serialize(() => {
+        this.db.run(sql, params, function (err) {
+          if (err) {
+            // 如果是資料庫忙碌錯誤，暫時禁用資料庫記錄
+            if (err.code === "SQLITE_BUSY" || err.code === "SQLITE_LOCKED") {
+              console.warn("⚠️ 資料庫暫時忙碌，跳過此次寫入");
+              resolve(null);
+            } else {
+              reject(err);
+            }
+          } else {
+            resolve(this.lastID);
+          }
+        });
       });
     });
   }

@@ -5,284 +5,471 @@
  * 提供智能數據分析和結果解釋
  */
 
+import { BaseTool, ToolExecutionError, ToolErrorType } from "../base-tool.js";
 import statService from "../../services/stat/stat-service.js";
 import logger from "../../config/logger.js";
 
-export const performChiSquare = {
-  name: "perform_chisquare",
-  description: "執行卡方檢定分析，支援適合度檢定和獨立性檢定",
-  inputSchema: {
-    type: "object",
-    properties: {
-      data: {
+/**
+ * 卡方檢定工具
+ */
+export class PerformChiSquareTool extends BaseTool {
+  constructor() {
+    super(
+      "perform_chisquare",
+      "執行卡方檢定分析，支援適合度檢定和獨立性檢定",
+      {
         type: "object",
         properties: {
-          observed: {
-            type: "array",
-            description: "觀察頻數陣列 (一維或二維陣列)",
-            items: {
-              oneOf: [
-                { type: "number" },
-                { type: "array", items: { type: "number" } },
-              ],
-            },
-            minItems: 2,
-          },
-          expected: {
-            type: "array",
-            description: "期望頻數陣列 (適合度檢定時使用)",
-            items: { type: "number" },
-            minItems: 2,
-          },
-          alpha: {
-            type: "number",
-            description: "顯著水準",
-            default: 0.05,
-            minimum: 0.001,
-            maximum: 0.1,
-          },
-        },
-        required: ["observed"],
-      },
-      context: {
-        type: "object",
-        properties: {
-          scenario: {
-            type: "string",
-            description: "分析場景 (medical, survey, quality, business, etc.)",
-            examples: ["medical", "survey", "quality", "business", "genetics"],
-          },
-          description: {
-            type: "string",
-            description: "研究問題描述",
-          },
-          variable_names: {
+          data: {
             type: "object",
             properties: {
-              row_variable: { type: "string", description: "列變數名稱" },
-              column_variable: { type: "string", description: "行變數名稱" },
-              categories: {
+              observed: {
                 type: "array",
-                items: { type: "string" },
-                description: "類別名稱",
+                description: "觀察頻數陣列 (一維或二維陣列)",
+                items: {
+                  oneOf: [
+                    { type: "number" },
+                    { type: "array", items: { type: "number" } },
+                  ],
+                },
+                minItems: 2,
+              },
+              expected: {
+                type: "array",
+                description: "期望頻數陣列 (適合度檢定時使用)",
+                items: { type: "number" },
+                minItems: 2,
+              },
+              alpha: {
+                type: "number",
+                description: "顯著水準",
+                default: 0.05,
+                minimum: 0.001,
+                maximum: 0.1,
+              },
+            },
+            required: ["observed"],
+          },
+          context: {
+            type: "object",
+            properties: {
+              scenario: {
+                type: "string",
+                description:
+                  "分析場景 (medical, education, quality, market, etc.)",
+                examples: ["medical", "education", "quality", "market"],
+              },
+              hypothesis: {
+                type: "string",
+                description: "研究假設",
+              },
+              variables: {
+                type: "object",
+                description: "變數名稱",
+                properties: {
+                  variable1: { type: "string" },
+                  variable2: { type: "string" },
+                },
               },
             },
           },
         },
+        required: ["data"],
       },
-    },
-    required: ["data"],
-  },
-};
+      "stat",
+    );
+  }
 
-export async function handlePerformChiSquare(args) {
-  try {
-    logger.info("收到卡方檢定請求", {
-      observedSize: args.data.observed?.length,
-      hasExpected: !!args.data.expected,
-      scenario: args.context?.scenario,
-    });
+  async execute(args) {
+    try {
+      logger.info("執行卡方檢定", {
+        observed: args.data?.observed,
+        scenario: args.context?.scenario,
+      });
 
-    // 驗證輸入數據
-    if (!args.data.observed || args.data.observed.length < 2) {
-      throw new Error("observed 必須包含至少 2 個數值或頻數");
-    }
+      // 驗證輸入
+      this.validateInput(args);
 
-    // 檢查是否為二維陣列 (獨立性檢定)
-    const isContingencyTable = Array.isArray(args.data.observed[0]);
+      // 準備分析參數
+      const analysisParams = this.prepareAnalysisParams(args);
 
-    if (isContingencyTable) {
-      // 驗證列聯表
-      const rows = args.data.observed.length;
-      const cols = args.data.observed[0].length;
+      // 調用統計服務
+      const result = await statService.performChiSquareTest(analysisParams);
 
-      if (rows < 2 || cols < 2) {
-        throw new Error("列聯表必須至少為 2x2");
+      // 生成情境化報告
+      const report = this.generateChiSquareReport(result, args);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: report,
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error("卡方檢定失敗", { error: error.message, args });
+
+      if (error instanceof ToolExecutionError) {
+        throw error;
       }
 
-      // 檢查所有列的長度是否一致
-      const inconsistentRows = args.data.observed.some(
-        row => row.length !== cols,
+      throw new ToolExecutionError(
+        ToolErrorType.EXECUTION_ERROR,
+        `卡方檢定失敗: ${error.message}`,
       );
-      if (inconsistentRows) {
-        throw new Error("列聯表的所有列必須具有相同的長度");
+    }
+  }
+
+  /**
+   * 驗證輸入參數
+   * @param {Object} args - 輸入參數
+   */
+  validateInput(args) {
+    if (!args.data || !args.data.observed) {
+      throw new ToolExecutionError(
+        ToolErrorType.INVALID_INPUT,
+        "觀察頻數不能為空",
+      );
+    }
+
+    const observed = args.data.observed;
+
+    // 檢查是否為有效的數字陣列
+    if (!Array.isArray(observed) || observed.length < 2) {
+      throw new ToolExecutionError(
+        ToolErrorType.INVALID_INPUT,
+        "觀察頻數至少需要 2 個值",
+      );
+    }
+
+    // 檢查數值有效性
+    const flattenedObserved = observed.flat();
+    if (flattenedObserved.some(val => !Number.isFinite(val) || val < 0)) {
+      throw new ToolExecutionError(
+        ToolErrorType.INVALID_INPUT,
+        "所有觀察頻數必須是非負數字",
+      );
+    }
+
+    // 如果提供期望頻數，檢查其有效性
+    if (args.data.expected) {
+      const expected = args.data.expected;
+      if (
+        !Array.isArray(expected) ||
+        expected.length !== flattenedObserved.length
+      ) {
+        throw new ToolExecutionError(
+          ToolErrorType.INVALID_INPUT,
+          "期望頻數的長度必須與觀察頻數一致",
+        );
+      }
+
+      if (expected.some(val => !Number.isFinite(val) || val <= 0)) {
+        throw new ToolExecutionError(
+          ToolErrorType.INVALID_INPUT,
+          "所有期望頻數必須是正數",
+        );
+      }
+    }
+  }
+
+  /**
+   * 準備分析參數
+   * @param {Object} args - 輸入參數
+   * @returns {Object} 分析參數
+   */
+  prepareAnalysisParams(args) {
+    const { observed, expected, alpha = 0.05 } = args.data;
+
+    return {
+      observed,
+      expected,
+      alpha,
+      test_type: expected ? "goodness_of_fit" : "independence",
+    };
+  }
+
+  /**
+   * 生成卡方檢定報告
+   * @param {Object} result - 統計結果
+   * @param {Object} args - 原始參數
+   * @returns {string} 格式化報告
+   */
+  generateChiSquareReport(result, args) {
+    const { scenario, hypothesis, variables } = args.context || {};
+    const isGoodnessOfFit = args.data.expected !== undefined;
+
+    let report = "";
+
+    // 標題
+    const testType = isGoodnessOfFit ? "適合度檢定" : "獨立性檢定";
+    report += `# 📊 卡方${testType}結果\n\n`;
+
+    // 場景資訊
+    if (scenario) {
+      report += `**分析場景**: ${this.getScenarioDescription(scenario)}\n\n`;
+    }
+
+    if (hypothesis) {
+      report += `**研究假設**: ${hypothesis}\n\n`;
+    }
+
+    // 檢定類型說明
+    report += "## 🔍 檢定類型\n\n";
+    if (isGoodnessOfFit) {
+      report += "**適合度檢定 (Goodness-of-fit test)**\n";
+      report += "檢驗觀察到的頻數分佈是否符合期望的理論分佈。\n\n";
+    } else {
+      report += "**獨立性檢定 (Independence test)**\n";
+      report += "檢驗兩個分類變數之間是否相互獨立。\n\n";
+    }
+
+    // 統計量
+    report += "## 📈 統計量\n\n";
+    report += `- **卡方統計量 (χ²)**: ${result.statistic.toFixed(4)}\n`;
+    report += `- **自由度 (df)**: ${result.df}\n`;
+    report += `- **p 值**: ${this.formatPValue(result.p_value)}\n`;
+    report += `- **顯著水準 (α)**: ${args.data.alpha || 0.05}\n\n`;
+
+    // 決策
+    report += "## 🎯 統計決策\n\n";
+    const isSignificant = result.p_value < (args.data.alpha || 0.05);
+
+    if (isSignificant) {
+      report += "**結論**: 拒絕虛無假設 ❌\n\n";
+      if (isGoodnessOfFit) {
+        report += "觀察到的頻數分佈與期望分佈有**顯著差異**。\n\n";
+      } else {
+        report += "兩個變數之間存在**顯著關聯**，不是相互獨立的。\n\n";
+      }
+    } else {
+      report += "**結論**: 無法拒絕虛無假設 ✅\n\n";
+      if (isGoodnessOfFit) {
+        report += "觀察到的頻數分佈與期望分佈**無顯著差異**。\n\n";
+      } else {
+        report += "兩個變數之間**無顯著關聯**，可視為相互獨立。\n\n";
       }
     }
 
-    // 執行卡方檢定
-    const result = await statService.performChiSquareTest(
-      args.data,
-      args.context,
+    // 效果量
+    if (result.effect_size) {
+      report += "## 📏 效果量\n\n";
+      report += `- **Cramér's V**: ${result.effect_size.cramers_v.toFixed(4)}\n`;
+      report += `- **效果大小**: ${this.interpretCramersV(result.effect_size.cramers_v)}\n\n`;
+    }
+
+    // 頻數表
+    if (result.observed_freq && result.expected_freq) {
+      report += "## 📋 頻數表\n\n";
+      report += this.formatFrequencyTable(
+        result.observed_freq,
+        result.expected_freq,
+      );
+    }
+
+    // 情境化解釋
+    report += this.generateContextualInterpretation(
+      result,
+      args,
+      isSignificant,
     );
 
-    // 產生報告
-    const report = generateChiSquareReport(result, args.data, args.context);
+    // 假設檢查
+    report += "## ⚠️ 假設檢查\n\n";
+    report += this.generateAssumptionChecks(result, args);
 
-    logger.info("卡方檢定完成", {
-      pValue: result.p_value,
-      significant: result.reject_null,
-    });
+    // 建議
+    report += "## 💡 建議\n\n";
+    report += this.generateRecommendations(result, args, isSignificant);
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: report,
-        },
-      ],
+    return report;
+  }
+
+  /**
+   * 獲取場景描述
+   * @param {string} scenario - 場景代碼
+   * @returns {string} 場景描述
+   */
+  getScenarioDescription(scenario) {
+    const descriptions = {
+      medical: "醫學研究",
+      education: "教育研究",
+      quality: "品質管控",
+      market: "市場研究",
+      social: "社會科學研究",
     };
-  } catch (error) {
-    logger.error("卡方檢定執行失敗", { error: error.message });
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `卡方檢定執行失敗: ${error.message}`,
-        },
-      ],
-      isError: true,
-    };
-  }
-}
-
-function generateChiSquareReport(result, inputData, context) {
-  const {
-    statistic,
-    p_value,
-    degrees_of_freedom,
-    reject_null,
-    interpretation,
-  } = result;
-  const isContingencyTable = Array.isArray(inputData.observed[0]);
-  const testType = isContingencyTable ? "獨立性檢定" : "適合度檢定";
-
-  // 取得變數名稱
-  const varNames = context?.variable_names || {};
-  const rowVar = varNames.row_variable || "變數A";
-  const colVar = varNames.column_variable || "變數B";
-  const categories = varNames.categories || [];
-
-  let report = `# 卡方檢定分析報告\n\n`;
-
-  // 分析描述
-  if (context?.description) {
-    report += `## 研究問題\n${context.description}\n\n`;
+    return descriptions[scenario] || scenario;
   }
 
-  report += `## 檢定類型\n${testType}\n\n`;
-
-  // 假設設定
-  report += `## 假設設定\n`;
-  if (isContingencyTable) {
-    report += `- **虛無假設 (H₀)**: ${rowVar} 和 ${colVar} 相互獨立\n`;
-    report += `- **對立假設 (H₁)**: ${rowVar} 和 ${colVar} 存在關聯性\n`;
-  } else {
-    report += `- **虛無假設 (H₀)**: 觀察頻數符合期望分佈\n`;
-    report += `- **對立假設 (H₁)**: 觀察頻數不符合期望分佈\n`;
+  /**
+   * 格式化 p 值
+   * @param {number} pValue - p 值
+   * @returns {string} 格式化的 p 值
+   */
+  formatPValue(pValue) {
+    if (pValue < 0.001) return "< 0.001";
+    if (pValue < 0.01) return pValue.toFixed(4);
+    return pValue.toFixed(3);
   }
-  report += `- **顯著水準 (α)**: ${inputData.alpha || 0.05}\n\n`;
 
-  // 觀察數據
-  report += `## 觀察數據\n`;
-  if (isContingencyTable) {
-    report += `**列聯表**:\n`;
-    report += formatContingencyTable(inputData.observed, varNames);
-  } else {
-    report += `**觀察頻數**: ${inputData.observed.join(", ")}\n`;
-    if (inputData.expected) {
-      report += `**期望頻數**: ${inputData.expected.join(", ")}\n`;
+  /**
+   * 解釋 Cramér's V 效果大小
+   * @param {number} cramersV - Cramér's V 值
+   * @returns {string} 效果大小描述
+   */
+  interpretCramersV(cramersV) {
+    if (cramersV < 0.1) return "微小";
+    if (cramersV < 0.3) return "小";
+    if (cramersV < 0.5) return "中等";
+    return "大";
+  }
+
+  /**
+   * 格式化頻數表
+   * @param {Array} observed - 觀察頻數
+   * @param {Array} expected - 期望頻數
+   * @returns {string} 格式化的頻數表
+   */
+  formatFrequencyTable(observed, expected) {
+    let table = "| | 觀察頻數 | 期望頻數 | 差異 |\n";
+    table += "|---|---|---|---|\n";
+
+    if (Array.isArray(observed[0])) {
+      // 二維陣列（列聯表）
+      observed.forEach((row, i) => {
+        row.forEach((obs, j) => {
+          const exp = expected[i][j];
+          const diff = obs - exp;
+          table += `| (${i + 1},${j + 1}) | ${obs} | ${exp.toFixed(1)} | ${diff > 0 ? "+" : ""}${diff.toFixed(1)} |\n`;
+        });
+      });
+    } else {
+      // 一維陣列（適合度檢定）
+      observed.forEach((obs, i) => {
+        const exp = expected[i];
+        const diff = obs - exp;
+        table += `| 類別 ${i + 1} | ${obs} | ${exp.toFixed(1)} | ${diff > 0 ? "+" : ""}${diff.toFixed(1)} |\n`;
+      });
     }
-  }
-  report += `\n`;
 
-  // 檢定結果
-  report += `## 檢定結果\n`;
-  report += `- **卡方統計量 (χ²)**: ${statistic.toFixed(4)}\n`;
-  report += `- **自由度 (df)**: ${degrees_of_freedom}\n`;
-  report += `- **p值**: ${p_value.toFixed(6)}\n`;
-  report += `- **結論**: ${reject_null ? "拒絕虛無假設" : "不拒絕虛無假設"}\n\n`;
-
-  // 統計解釋
-  report += `## 統計解釋\n`;
-  report += `${interpretation.summary}\n\n`;
-
-  // 實務意義
-  if (interpretation.practical_significance) {
-    report += `## 實務意義\n`;
-    report += `${interpretation.practical_significance}\n\n`;
+    return table + "\n";
   }
 
-  // 情境建議
-  if (
-    interpretation.recommendations &&
-    interpretation.recommendations.length > 0
-  ) {
-    report += `## 建議\n`;
-    interpretation.recommendations.forEach((rec, index) => {
-      report += `${index + 1}. ${rec}\n`;
-    });
-    report += `\n`;
-  }
+  /**
+   * 生成情境化解釋
+   * @param {Object} result - 統計結果
+   * @param {Object} args - 原始參數
+   * @param {boolean} isSignificant - 是否顯著
+   * @returns {string} 情境化解釋
+   */
+  generateContextualInterpretation(result, args, isSignificant) {
+    const { scenario, variables } = args.context || {};
+    const isGoodnessOfFit = args.data.expected !== undefined;
 
-  // 效果量解釋 (如果有的話)
-  if (result.effect_size) {
-    report += `## 效果量\n`;
-    report += `**Cramér's V**: ${result.effect_size.toFixed(4)}\n`;
-    const effectInterpretation = getEffectSizeInterpretation(
-      result.effect_size,
-    );
-    report += `效果量為${effectInterpretation}，表示關聯性的強度。\n\n`;
-  }
+    let interpretation = "## 🎭 結果解釋\n\n";
 
-  // 注意事項
-  report += `## 注意事項\n`;
-  report += `- 卡方檢定要求所有期望頻數 ≥ 5\n`;
-  report += `- 本檢定僅能檢驗關聯性，無法確定因果關係\n`;
-  if (isContingencyTable) {
-    report += `- 如發現顯著關聯，建議進一步分析殘差以了解關聯模式\n`;
-  }
-
-  return report;
-}
-
-function formatContingencyTable(observed, varNames) {
-  let table = "```\n";
-
-  const rows = observed.length;
-  const cols = observed[0].length;
-
-  // 表頭
-  table += "       ";
-  for (let j = 0; j < cols; j++) {
-    table += `    ${varNames.categories?.[j] || `類別${j + 1}`}`.padEnd(8);
-  }
-  table += "\n";
-
-  // 分隔線
-  table += "-------";
-  for (let j = 0; j < cols; j++) {
-    table += "--------";
-  }
-  table += "\n";
-
-  // 數據行
-  for (let i = 0; i < rows; i++) {
-    const rowName = varNames.categories?.[cols + i] || `組別${i + 1}`;
-    table += rowName.padEnd(7);
-    for (let j = 0; j < cols; j++) {
-      table += `${observed[i][j]}`.padStart(8);
+    if (scenario === "medical") {
+      if (isGoodnessOfFit) {
+        interpretation += isSignificant
+          ? "病例分佈與預期的流行病學模式存在顯著差異，建議進一步調查可能的原因。\n\n"
+          : "病例分佈符合預期的流行病學模式，未發現異常情況。\n\n";
+      } else {
+        interpretation += isSignificant
+          ? "治療方法與療效之間存在顯著關聯，不同治療方法的效果確實不同。\n\n"
+          : "治療方法與療效之間無顯著關聯，各種治療方法的效果可能相似。\n\n";
+      }
+    } else if (scenario === "education") {
+      interpretation += isSignificant
+        ? "學習成果與教學方法之間存在顯著關聯，不同的教學策略產生不同的效果。\n\n"
+        : "學習成果與教學方法之間無顯著關聯，教學方法可能不是影響學習成果的主要因素。\n\n";
+    } else if (scenario === "quality") {
+      interpretation += isSignificant
+        ? "產品品質與生產條件之間存在顯著關聯，需要調整生產流程以改善品質。\n\n"
+        : "產品品質與生產條件之間無顯著關聯，目前的生產流程是穩定的。\n\n";
+    } else {
+      // 一般性解釋
+      if (isGoodnessOfFit) {
+        interpretation += isSignificant
+          ? "觀察到的資料分佈與理論期望存在顯著差異。\n\n"
+          : "觀察到的資料分佈符合理論期望。\n\n";
+      } else {
+        interpretation += isSignificant
+          ? "兩個變數之間存在顯著關聯性。\n\n"
+          : "兩個變數之間無顯著關聯性。\n\n";
+      }
     }
-    table += "\n";
+
+    return interpretation;
   }
 
-  table += "```\n";
-  return table;
-}
+  /**
+   * 生成假設檢查
+   * @param {Object} result - 統計結果
+   * @param {Object} args - 原始參數
+   * @returns {string} 假設檢查
+   */
+  generateAssumptionChecks(result, args) {
+    let checks = "";
 
-function getEffectSizeInterpretation(cramerV) {
-  if (cramerV < 0.1) return "微弱";
-  if (cramerV < 0.3) return "小";
-  if (cramerV < 0.5) return "中等";
-  return "大";
+    // 檢查期望頻數
+    if (result.expected_freq) {
+      const flatExpected = result.expected_freq.flat
+        ? result.expected_freq.flat()
+        : result.expected_freq;
+      const minExpected = Math.min(...flatExpected);
+
+      if (minExpected < 5) {
+        checks +=
+          "⚠️ **期望頻數不足**: 有期望頻數小於 5，可能影響檢定的準確性。\n";
+        checks += "   建議：合併類別或使用 Fisher 精確檢定。\n\n";
+      } else {
+        checks += "✅ **期望頻數充足**: 所有期望頻數都大於等於 5。\n\n";
+      }
+    }
+
+    // 檢查獨立性
+    checks += "✅ **觀察獨立**: 假設每個觀察值都是獨立的。\n\n";
+
+    // 檢查隨機抽樣
+    checks += "⚠️ **隨機抽樣**: 請確認資料是透過隨機抽樣獲得的。\n\n";
+
+    return checks;
+  }
+
+  /**
+   * 生成建議
+   * @param {Object} result - 統計結果
+   * @param {Object} args - 原始參數
+   * @param {boolean} isSignificant - 是否顯著
+   * @returns {string} 建議
+   */
+  generateRecommendations(result, args, isSignificant) {
+    let recommendations = "";
+
+    if (isSignificant) {
+      recommendations +=
+        "- 結果顯示顯著關聯/差異，建議深入分析具體的關聯模式\n";
+      recommendations +=
+        "- 考慮進行事後檢定 (post-hoc tests) 找出具體的差異來源\n";
+      recommendations += "- 檢查是否有其他混淆變數影響結果\n";
+    } else {
+      recommendations += "- 結果未顯示顯著關聯/差異，但不等於證明無關聯\n";
+      recommendations += "- 考慮增加樣本大小以提高檢定效力\n";
+      recommendations += "- 檢查資料品質和測量準確性\n";
+    }
+
+    // 樣本大小建議
+    const totalCount = Array.isArray(result.observed_freq)
+      ? result.observed_freq.flat().reduce((sum, val) => sum + val, 0)
+      : result.observed_freq;
+
+    if (totalCount < 50) {
+      recommendations += "- 樣本大小較小，建議增加樣本以提高結果的可靠性\n";
+    }
+
+    recommendations += "- 建議重複研究以驗證結果的穩定性\n";
+
+    return recommendations;
+  }
 }
