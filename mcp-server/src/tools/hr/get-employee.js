@@ -15,7 +15,46 @@ export class GetEmployeeTool extends BaseTool {
   constructor() {
     super(
       "get_employee",
-      "根據員工編號查詢員工詳細資訊，從 org_employee 資料表獲取資料",
+      `根據員工編號查詢特定員工的詳細資訊，支援欄位分組選擇
+
+欄位分組說明：
+【basic - 基本資料群組】
+• employee_no: 員工編號 (公司唯一識別碼)
+• name: 員工姓名
+• eng_name: 英文姓名
+• sex: 性別 (M=男性, F=女性)
+• birthday: 生日日期
+• id_card: 身份證字號
+• is_suspended: 停用狀態 (0=正常, 1=停用/離職)
+
+【contact - 聯絡方式群組】
+• email: 公司電子郵件
+• mobile: 手機號碼
+• telphone: 聯絡電話
+• ext_num: 分機號碼
+• address: 聯絡地址
+
+【department - 部門資訊群組】
+• group_code: 部門代碼 (如 IT, HR, QA)
+• group_name: 部門名稱 (如 資訊部, 人力資源部)
+
+【position - 職位資訊群組】
+• title_code: 職位代碼
+• title_name: 職位名稱 (如 軟體工程師, 部門經理)
+• user_type: 使用者類型
+
+【employment - 雇用資訊群組】
+• arrive_date: 到職日期
+• leave_date: 離職日期 (在職者為 null)
+• last_suspended_date: 最後停用日期
+• domain: 網域帳號
+• account: 系統帳號
+• lang: 語言設定
+
+使用說明：
+- 預設返回 basic、contact、department、position 四個群組
+- 可根據需要自訂返回的欄位群組
+- 敏感資訊僅在明確請求時返回`,
       {
         type: "object",
         properties: {

@@ -15,7 +15,27 @@ export class GetMILTypeListTool extends BaseTool {
   constructor() {
     super(
       "get-mil-type-list",
-      "取得 MIL 類型列表，獲取所有 MIL 類型的唯一列表",
+      `取得所有 MIL 類別的完整清單，用於了解系統中有哪些分類
+
+返回資料說明：
+• TypeName: MIL 類別名稱的唯一列表
+• 常見類別包括：
+  - 廠內Issue: 廠區內部問題
+  - 品質ISSUE管理: 品質相關問題
+  - CEO/COO追蹤待辦事項: 高層追蹤項目
+  - 兩廠資訊處: 資訊系統相關
+  - 稽核追蹤: 稽核發現項目
+  - 生產入庫進度雷達管控: 生產相關
+  - OQC/IPQC/LAB Issue: 品管檢驗問題
+  - 資訊安全稽核: 資安相關
+  - SmartFactory: 智慧工廠項目
+  - LessonLearnt: 經驗學習項目
+  - 其他業務分類
+
+用途：
+- 了解 MIL 系統的分類架構
+- 作為篩選條件的參考
+- 統計分析各類別的分布`,
       {
         type: "object",
         properties: {},

@@ -15,7 +15,33 @@ export class GetEmployeeCountTool extends BaseTool {
   constructor() {
     super(
       "get_employee_count",
-      "獲取系統中員工總數，可根據員工狀態（在職/離職）進行篩選",
+      `統計系統中員工數量，提供多維度統計分析
+
+返回統計欄位說明：
+【總數統計】
+• total: 總員工數量 (根據 status 參數決定範圍)
+• activeCount: 在職員工數量 (is_suspended = 0)
+• inactiveCount: 離職/停用員工數量 (is_suspended = 1)
+
+【性別統計】
+• maleCount: 男性員工數量 (sex = 'M')
+• femaleCount: 女性員工數量 (sex = 'F')
+
+【百分比分析】 (當 status='all' 時提供)
+• percentages.active: 在職員工佔總數百分比
+• percentages.inactive: 離職員工佔總數百分比
+• percentages.male: 男性員工佔總數百分比
+• percentages.female: 女性員工佔總數百分比
+
+【查詢資訊】
+• queryTime: 查詢執行時間
+• status: 查詢的員工狀態範圍
+
+用途：
+- 了解公司整體人力規模
+- 分析在職與離職員工比例
+- 性別比例統計分析
+- 人力資源規劃參考`,
       {
         type: "object",
         properties: {

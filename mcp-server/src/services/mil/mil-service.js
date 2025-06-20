@@ -21,6 +21,7 @@ class MILService {
    */
   async getMILList(filters = {}, page = 1, limit = 20, sort = "RecordDate") {
     try {
+      console.log("getMILList");
       // 構建 WHERE 條件
       const whereConditions = [];
 
@@ -71,6 +72,7 @@ class MILService {
           ? " WHERE " + whereConditions.join(" AND ")
           : "";
 
+      console.log("where", whereClause);
       // 建構主要查詢 SQL (含分頁)
       const offset = (page - 1) * limit;
       const mainQuery = `
@@ -83,9 +85,11 @@ class MILService {
         FROM v_mil_kd
         ${whereClause}
         ORDER BY ${sort} DESC
-        OFFSET ${offset} ROWS 
-        FETCH NEXT ${limit} ROWS ONLY
+        OFFSET @offset ROWS 
+        FETCH NEXT @limit ROWS ONLY
               `;
+
+      console.log("mainQuery", mainQuery);
 
       // 建構計數查詢 SQL
       const countQuery = `SELECT COUNT(*) as total FROM v_mil_kd${whereClause}`;
@@ -93,6 +97,9 @@ class MILService {
       // 執行主要查詢
       const mainRequest = databaseService.getPool(this.dbName).request();
       this.setQueryParameters(mainRequest, filters);
+      // 添加分頁參數
+      mainRequest.input("offset", offset);
+      mainRequest.input("limit", limit);
       const result = await mainRequest.query(mainQuery);
 
       // 執行計數查詢
