@@ -7,6 +7,11 @@
 import { toolManager } from "./tool-manager.js";
 import { registerHRTools, moduleInfo as hrModuleInfo } from "./hr/index.js";
 import { registerMILTools, moduleInfo as milModuleInfo } from "./mil/index.js";
+import {
+  tools as statTools,
+  handlers as statHandlers,
+  toolsInfo as statModuleInfo,
+} from "./stat/index.js";
 import logger from "../config/logger.js";
 import moduleRegistry from "../config/module-registry.js";
 
@@ -22,6 +27,9 @@ export function registerAllTools() {
 
     // 註冊 MIL 工具
     registerMILToolsInternal();
+
+    // 註冊統計分析工具
+    registerStatToolsInternal();
 
     // 註冊模組元數據
     registerModuleMetadata();
@@ -81,6 +89,34 @@ function registerMILToolsInternal() {
   registerMILTools(toolManager);
 
   logger.info("MIL 工具註冊成功");
+}
+
+/**
+ * 註冊統計分析工具
+ */
+function registerStatToolsInternal() {
+  logger.info("註冊統計分析工具...");
+
+  try {
+    // 註冊所有統計工具
+    statTools.forEach(tool => {
+      const handler = statHandlers[tool.name];
+      if (handler) {
+        toolManager.registerTool(tool, handler);
+        logger.debug(`已註冊統計工具: ${tool.name}`);
+      } else {
+        logger.warn(`找不到統計工具 ${tool.name} 的處理器`);
+      }
+    });
+
+    // 註冊統計模組元數據
+    moduleRegistry.registerModuleMetadata("stat", statModuleInfo);
+
+    logger.info(`統計分析工具註冊成功，共註冊 ${statTools.length} 個工具`);
+  } catch (error) {
+    logger.error("統計分析工具註冊失敗:", error);
+    throw error;
+  }
 }
 
 /**

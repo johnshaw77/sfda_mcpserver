@@ -24,7 +24,7 @@ export class ToolManager {
   /**
    * 註冊工具
    */
-  registerTool(tool) {
+  registerTool(tool, handler = null) {
     if (!tool || !tool.name) {
       throw new Error("Invalid tool: missing name");
     }
@@ -33,7 +33,26 @@ export class ToolManager {
       logger.warn(`Tool ${tool.name} already registered, overwriting`);
     }
 
-    this.tools.set(tool.name, tool);
+    // 如果是簡單的工具定義和處理器，包裝成 BaseTool 格式
+    if (handler && !tool.execute && !tool.getInfo) {
+      const wrappedTool = {
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        execute: handler,
+        getInfo: function () {
+          return {
+            name: this.name,
+            description: this.description,
+            inputSchema: this.inputSchema,
+          };
+        },
+      };
+      this.tools.set(tool.name, wrappedTool);
+    } else {
+      this.tools.set(tool.name, tool);
+    }
+
     this.globalStats.totalTools = this.tools.size;
 
     logger.info(`Tool registered: ${tool.name}`, {
