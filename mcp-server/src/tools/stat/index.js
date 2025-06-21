@@ -7,6 +7,7 @@
 import { PerformTTestTool } from "./perform-ttest.js";
 import { AnalyzeDataTool } from "./analyze-data.js";
 import { PerformChiSquareTool } from "./perform-chisquare.js";
+import { ParseCSVTTestTool } from "./parse-csv-ttest.js";
 
 // Stat 模組名稱
 export const MODULE_NAME = "stat";
@@ -22,7 +23,7 @@ export const moduleInfo = {
 // 創建工具實例並設定模組（與 MIL 一致的方式）
 const createTool = Tool => {
   const tool = new Tool();
-  tool.moduleName = MODULE_NAME;
+  tool.module = MODULE_NAME; // 使用 module 而不是 moduleName
   return tool;
 };
 
@@ -31,6 +32,7 @@ export const statTools = [
   createTool(PerformTTestTool),
   createTool(AnalyzeDataTool),
   createTool(PerformChiSquareTool),
+  createTool(ParseCSVTTestTool),
 ];
 
 // 註冊所有統計工具的函數 (與 HR/MIL 一致的方式)

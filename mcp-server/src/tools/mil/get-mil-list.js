@@ -96,6 +96,8 @@ export class GetMILListTool extends BaseTool {
       {
         cacheable: false, // 暫時關閉緩存
         cacheExpiry: 60 * 5, // 5 分鐘
+        module: "mil",
+        requiredDatabases: ["mil"],
       },
     );
   }

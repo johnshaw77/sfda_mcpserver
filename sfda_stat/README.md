@@ -5,11 +5,11 @@
 ## 功能特色
 
 - 📊 **描述性統計**: 平均數、中位數、標準差、變異數等
-- 📈 **推論統計**: t檢定、卡方檢定、ANOVA等假設檢定
+- 📈 **推論統計**: t 檢定、卡方檢定、ANOVA 等假設檢定
 - 📉 **迴歸分析**: 線性迴歸、多元迴歸、非線性迴歸
-- 🔗 **相關性分析**: Pearson、Spearman、Kendall相關係數
-- 📋 **機率分佈**: 常態分佈、t分佈、卡方分佈等各種分佈分析
-- ⏱️ **時間序列**: 趨勢分析、季節性分析、ARIMA模型
+- 🔗 **相關性分析**: Pearson、Spearman、Kendall 相關係數
+- 📋 **機率分佈**: 常態分佈、t 分佈、卡方分佈等各種分佈分析
+- ⏱️ **時間序列**: 趨勢分析、季節性分析、ARIMA 模型
 - 🎯 **多變量分析**: 主成分分析、因子分析、分群分析
 
 ## 技術棧
@@ -26,11 +26,13 @@
 ### 1. 安裝 uv（如果尚未安裝）
 
 **Windows (PowerShell)**:
+
 ```powershell
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
 **macOS/Linux**:
+
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
@@ -57,11 +59,19 @@ uv pip install -r requirements.txt
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 cd "d:\@Projects\sfda_mcpserver\sfda_stat"; .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+
+source venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# 使用 conda
+
+conda activate py310_stat
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 3. 存取 API 文件
 
 開啟瀏覽器，前往：
+
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
@@ -108,6 +118,7 @@ uv pip freeze > requirements.txt
 為了簡化開發流程，我們提供了開發腳本：
 
 **Windows (PowerShell)**:
+
 ```powershell
 # 初始化專案
 .\dev.ps1 setup
@@ -126,6 +137,7 @@ uv pip freeze > requirements.txt
 ```
 
 **macOS/Linux (Bash)**:
+
 ```bash
 # 給予執行權限
 chmod +x dev.sh
@@ -150,6 +162,7 @@ chmod +x dev.sh
 - 測試配置 (pytest, coverage)
 
 安裝不同的相依套件組合：
+
 ```bash
 # 僅安裝基本相依套件
 uv pip install -e .
@@ -167,26 +180,31 @@ uv pip install -e ".[dev,test]"
 ## API 端點
 
 ### 描述性統計
+
 - `POST /api/v1/descriptive/basic` - 基本統計量
 - `POST /api/v1/descriptive/distribution` - 分佈形狀測量
 - `POST /api/v1/descriptive/percentiles` - 百分位數計算
 
 ### 推論統計
-- `POST /api/v1/inferential/ttest` - t檢定
+
+- `POST /api/v1/inferential/ttest` - t 檢定
 - `POST /api/v1/inferential/chisquare` - 卡方檢定
 - `POST /api/v1/inferential/anova` - 變異數分析
 
 ### 迴歸分析
+
 - `POST /api/v1/regression/linear` - 線性迴歸
 - `POST /api/v1/regression/multiple` - 多元迴歸
 - `POST /api/v1/regression/polynomial` - 多項式迴歸
 
 ### 相關性分析
-- `POST /api/v1/correlation/pearson` - Pearson相關
-- `POST /api/v1/correlation/spearman` - Spearman相關
+
+- `POST /api/v1/correlation/pearson` - Pearson 相關
+- `POST /api/v1/correlation/spearman` - Spearman 相關
 - `POST /api/v1/correlation/matrix` - 相關矩陣
 
 ### 機率分佈
+
 - `POST /api/v1/distribution/normal` - 常態分佈分析
 - `POST /api/v1/distribution/test` - 分佈適合度檢定
 
@@ -301,7 +319,7 @@ docker run -p 8000:8000 sfda-stat
 建立 `docker-compose.yml`：
 
 ```yaml
-version: '3.8'
+version: "3.8"
 services:
   sfda-stat:
     build: .
@@ -318,6 +336,7 @@ services:
 ```
 
 啟動：
+
 ```bash
 docker-compose up -d
 ```

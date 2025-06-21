@@ -44,6 +44,8 @@ export class GetMILTypeListTool extends BaseTool {
       {
         cacheable: true,
         cacheExpiry: 60 * 30, // 30 分鐘快取，類型列表變動較少
+        module: "mil",
+        requiredDatabases: ["mil"],
       },
     );
   }

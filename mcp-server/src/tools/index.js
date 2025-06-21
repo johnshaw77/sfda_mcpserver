@@ -21,6 +21,7 @@ export function registerAllTools() {
   logger.info("開始註冊工具...");
 
   try {
+    console.log("註冊 HR 工具...");
     // 註冊 HR 工具
     registerHRToolsInternal();
 
@@ -38,6 +39,7 @@ export function registerAllTools() {
 
     return true;
   } catch (error) {
+    console.log("工具註冊失敗:", error);
     logger.error("工具註冊失敗:", error);
     throw error;
   }

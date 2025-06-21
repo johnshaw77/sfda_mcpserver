@@ -33,22 +33,27 @@ try {
   process.exit(1);
 }
 
-// 註冊所有工具
-try {
-  registerAllTools();
-  logger.info("工具註冊完成");
-} catch (error) {
-  logger.error("工具註冊失敗:", error);
-  process.exit(1);
-}
-
 // 初始化資料庫服務
+let databaseInitResults = {};
 try {
-  await databaseService.initialize();
-  logger.debug("資料庫服務初始化成功");
+  databaseInitResults = await databaseService.initialize();
+  logger.info("資料庫服務初始化完成", { results: databaseInitResults });
 } catch (error) {
   logger.error("資料庫服務初始化失敗，但伺服器將繼續啟動:", error);
   // 不讓資料庫錯誤阻止服務器啟動，但會記錄錯誤
+  databaseInitResults = { error: error.message };
+}
+
+// 註冊所有工具
+try {
+  registerAllTools();
+  logger.info("工具註冊完成", {
+    totalTools: getRegisteredTools().length,
+    databaseStatus: databaseInitResults,
+  });
+} catch (error) {
+  logger.error("工具註冊失敗:", error);
+  process.exit(1);
 }
 
 const app = express();
@@ -74,9 +79,67 @@ app.use((req, res, next) => {
 });
 
 // 健康檢查端點
-app.get("/health", (req, res) => {
+app.get("/health", async (req, res) => {
+  // 檢查資料庫服務狀態
+  const databaseStatus = {};
+
+  try {
+    // 檢查各個可能的資料庫連接
+    const dbServices = ["qms", "mil", "hr"]; // 根據您的實際資料庫服務調整
+
+    for (const dbName of dbServices) {
+      try {
+        const isAvailable = databaseService.isDatabaseAvailable
+          ? databaseService.isDatabaseAvailable(dbName)
+          : false;
+
+        databaseStatus[dbName] = {
+          available: isAvailable,
+          status: isAvailable ? "healthy" : "unavailable",
+        };
+      } catch (error) {
+        databaseStatus[dbName] = {
+          available: false,
+          status: "error",
+          error: error.message,
+        };
+      }
+    }
+  } catch (error) {
+    logger.warn("無法檢查資料庫狀態:", error);
+  }
+
+  // 檢查工具可用性
+  const tools = getRegisteredTools();
+  const toolsStatus = {
+    total: tools.length,
+    byModule: {},
+  };
+
+  try {
+    const moduleMetadata = getAllModuleMetadata();
+
+    Object.keys(moduleMetadata).forEach(moduleName => {
+      const moduleTools = tools.filter(tool => tool.module === moduleName);
+      toolsStatus.byModule[moduleName] = {
+        total: moduleTools.length,
+        tools: moduleTools.map(tool => tool.name),
+      };
+    });
+  } catch (error) {
+    logger.warn("無法檢查工具狀態:", error);
+  }
+
+  // 決定整體狀態
+  const hasAnyDatabase = Object.values(databaseStatus).some(db => db.available);
+  const overallStatus =
+    tools.length > 0 &&
+    (hasAnyDatabase || Object.keys(databaseStatus).length === 0)
+      ? "ok"
+      : "degraded";
+
   res.json({
-    status: "ok",
+    status: overallStatus,
     timestamp: new Date().toISOString(),
     version: "1.0.0",
     environment: config.nodeEnv,
@@ -85,6 +148,11 @@ app.get("/health", (req, res) => {
       initialized: mcpHandler.initialized,
       connections: sseManager.getStats().totalConnections,
     },
+    database: {
+      status: databaseStatus,
+      initResults: databaseInitResults,
+    },
+    tools: toolsStatus,
   });
 });
 
@@ -486,6 +554,116 @@ app.get("/sse", (req, res) => {
 // SSE 狀態查詢端點
 app.get("/sse/stats", (req, res) => {
   res.json(sseManager.getStats());
+});
+
+// 工具健康檢查端點 (新增)
+app.get("/api/tools/health", async (req, res) => {
+  const tools = getRegisteredTools();
+  const availableTools = [];
+  const unavailableTools = [];
+
+  for (const tool of tools) {
+    try {
+      // 檢查工具是否有設定需要的資料庫
+      if (
+        tool.requiredDatabases &&
+        Array.isArray(tool.requiredDatabases) &&
+        tool.requiredDatabases.length > 0
+      ) {
+        const unavailableDbs = [];
+
+        for (const dbName of tool.requiredDatabases) {
+          const isAvailable = databaseService.isDatabaseAvailable
+            ? databaseService.isDatabaseAvailable(dbName)
+            : false;
+
+          if (!isAvailable) {
+            unavailableDbs.push(dbName);
+          }
+        }
+
+        if (unavailableDbs.length > 0) {
+          unavailableTools.push({
+            name: tool.name,
+            module: tool.module,
+            reason: "database_unavailable",
+            requiredDatabases: tool.requiredDatabases,
+            unavailableDatabases: unavailableDbs,
+          });
+        } else {
+          availableTools.push({
+            name: tool.name,
+            module: tool.module,
+            status: "healthy",
+          });
+        }
+      } else {
+        // 沒有資料庫依賴的工具視為可用
+        availableTools.push({
+          name: tool.name,
+          module: tool.module,
+          status: "healthy",
+        });
+      }
+    } catch (error) {
+      unavailableTools.push({
+        name: tool.name,
+        module: tool.module,
+        reason: "check_failed",
+        error: error.message,
+      });
+    }
+  }
+
+  const healthStatus =
+    unavailableTools.length === 0
+      ? "healthy"
+      : availableTools.length > 0
+        ? "degraded"
+        : "unhealthy";
+
+  res.json({
+    success: true,
+    status: healthStatus,
+    summary: {
+      total: tools.length,
+      available: availableTools.length,
+      unavailable: unavailableTools.length,
+    },
+    availableTools: availableTools,
+    unavailableTools: unavailableTools,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 工具統計端點 (新增)
+app.get("/api/tools/stats", (req, res) => {
+  const tools = getRegisteredTools();
+  const moduleMetadata = getAllModuleMetadata();
+
+  // 按模組統計
+  const statsByModule = {};
+
+  Object.keys(moduleMetadata).forEach(moduleName => {
+    const moduleTools = tools.filter(tool => tool.module === moduleName);
+    statsByModule[moduleName] = {
+      name: moduleMetadata[moduleName].name,
+      description: moduleMetadata[moduleName].description,
+      toolCount: moduleTools.length,
+      tools: moduleTools.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+      })),
+    };
+  });
+
+  res.json({
+    success: true,
+    totalTools: tools.length,
+    totalModules: Object.keys(moduleMetadata).length,
+    statsByModule: statsByModule,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // 註冊所有路由

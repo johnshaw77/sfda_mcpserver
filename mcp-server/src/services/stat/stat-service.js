@@ -10,7 +10,7 @@ import fetch from "node-fetch";
 
 class StatService {
   constructor() {
-    this.apiBaseUrl = "http://localhost:8001/api/v1";
+    this.apiBaseUrl = "http://localhost:8000/api/v1";
   }
 
   /**

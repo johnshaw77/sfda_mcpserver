@@ -25,7 +25,7 @@ export const moduleInfo = {
 // 創建工具實例並設定模組
 const createTool = Tool => {
   const tool = new Tool();
-  tool.moduleName = MODULE_NAME;
+  tool.module = MODULE_NAME; // 使用 module 而不是 moduleName
   return tool;
 };
 

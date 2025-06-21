@@ -34,7 +34,7 @@ async def perform_chisquare_test(request: ChiSquareRequest):
     適用於獨立性檢定和適合度檢定
     """
     try:
-        return stats_service.perform_chisquare_test(
+        return stats_service.chi_square_test(
             observed=request.observed, expected=request.expected
         )
     except Exception as e:
@@ -49,6 +49,6 @@ async def perform_anova(request: ANOVARequest):
     檢定多個組別間是否有顯著差異
     """
     try:
-        return stats_service.perform_anova(request.groups)
+        return stats_service.anova(request.groups)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

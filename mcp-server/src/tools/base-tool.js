@@ -184,6 +184,8 @@ export class BaseTool {
     this.version = options.version || "1.0.0";
     this.cacheable = options.cacheable !== false; // 預設啟用緩存
     this.cacheTTL = options.cacheTTL || 300000; // 5 分鐘
+    this.module = options.module || "other"; // 工具所屬模組
+    this.requiredDatabases = options.requiredDatabases || []; // 需要的資料庫
     this.executionHistory = [];
     this.stats = {
       totalExecutions: 0,
@@ -200,6 +202,8 @@ export class BaseTool {
       description: this.description,
       cacheable: this.cacheable,
       cacheTTL: this.cacheTTL,
+      module: this.module,
+      requiredDatabases: this.requiredDatabases,
     });
   }
 
@@ -372,6 +376,42 @@ export class BaseTool {
         );
 
         throw validationError;
+      }
+
+      // 檢查資料庫可用性
+      try {
+        await this.checkDatabaseAvailability();
+      } catch (dbError) {
+        // 記錄資料庫可用性錯誤
+        await this.logger.logToolCall({
+          toolName: this.name,
+          executionId,
+          status: "error",
+          executionTime: Date.now() - startTime,
+          error: {
+            message: dbError.message,
+            type: dbError.type || "database_unavailable",
+            details: dbError.details,
+          },
+          context: {
+            sessionId: context.sessionId,
+            userId: context.userId,
+          },
+        });
+
+        // 記錄錯誤統計
+        globalStatsManager.recordToolError(
+          this.name,
+          dbError,
+          Date.now() - startTime,
+          {
+            sessionId: context.sessionId,
+            userId: context.userId,
+            executionId,
+          },
+        );
+
+        throw dbError;
       }
 
       // 檢查緩存
@@ -668,8 +708,9 @@ export class BaseTool {
       cacheable: this.cacheable,
       cacheTTL: this.cacheTTL,
       stats: { ...this.stats },
-      // 新增模組標識，子類可以通過 moduleName 屬性覆蓋
-      module: this.moduleName || "other",
+      // 新增模組標識，使用 module 屬性
+      module: this.module || "other",
+      requiredDatabases: this.requiredDatabases || [],
     };
   }
 
@@ -723,5 +764,48 @@ export class BaseTool {
    */
   checkVersionCompatibility(requiredVersion) {
     return globalVersionManager.checkCompatibility(this.name, requiredVersion);
+  }
+
+  /**
+   * 檢查所需資料庫是否可用
+   */
+  async checkDatabaseAvailability() {
+    if (!this.requiredDatabases || this.requiredDatabases.length === 0) {
+      return true; // 不需要資料庫的工具直接返回成功
+    }
+
+    try {
+      const databaseService = (await import("../services/database.js")).default;
+      const unavailableDbs = [];
+
+      for (const dbName of this.requiredDatabases) {
+        if (!databaseService.isDatabaseAvailable(dbName)) {
+          unavailableDbs.push(dbName);
+        }
+      }
+
+      if (unavailableDbs.length > 0) {
+        throw new ToolExecutionError(
+          `此工具需要的資料庫服務暫時不可用: ${unavailableDbs.join(", ")}`,
+          ToolErrorType.CONFIGURATION_ERROR,
+          {
+            unavailableDatabases: unavailableDbs,
+            requiredDatabases: this.requiredDatabases,
+          },
+        );
+      }
+
+      return true;
+    } catch (error) {
+      if (error instanceof ToolExecutionError) {
+        throw error;
+      }
+
+      throw new ToolExecutionError(
+        `資料庫可用性檢查失敗: ${error.message}`,
+        ToolErrorType.CONFIGURATION_ERROR,
+        { originalError: error.message },
+      );
+    }
   }
 }

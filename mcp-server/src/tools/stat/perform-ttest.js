@@ -94,27 +94,43 @@ export class PerformTTestTool extends BaseTool {
   }
 
   /**
+   * 覆蓋參數驗證方法以支援向後兼容性
+   * @param {Object} params - 輸入參數
+   */
+  validateInput(params) {
+    // 🔧 在驗證之前先進行參數格式轉換（向後兼容）
+    const normalizedParams = this.normalizeParameters(params);
+    
+    // 使用轉換後的參數進行標準驗證
+    return super.validateInput(normalizedParams);
+  }
+
+  /**
    * 執行工具
    * @param {Object} params - 工具參數
    */
   async _execute(params) {
     try {
+      // 🔧 向後兼容處理：自動轉換舊格式參數
+      const normalizedParams = this.normalizeParameters(params);
+      
       logger.info("收到 T檢定請求", {
-        sample1Size: params.data.sample1?.length,
-        sample2Size: params.data.sample2?.length,
-        paired: params.data.paired,
-        scenario: params.context?.scenario,
+        sample1Size: normalizedParams.data.sample1?.length,
+        sample2Size: normalizedParams.data.sample2?.length,
+        paired: normalizedParams.data.paired,
+        scenario: normalizedParams.context?.scenario,
+        originalFormat: params.data ? 'new' : 'legacy',
       });
 
       // 驗證輸入數據
-      if (!params.data.sample1 || params.data.sample1.length < 2) {
+      if (!normalizedParams.data.sample1 || normalizedParams.data.sample1.length < 2) {
         throw new ToolExecutionError(
           "sample1 必須包含至少 2 個數值",
           ToolErrorType.VALIDATION_ERROR,
         );
       }
 
-      if (params.data.sample2 && params.data.sample2.length < 2) {
+      if (normalizedParams.data.sample2 && normalizedParams.data.sample2.length < 2) {
         throw new ToolExecutionError(
           "sample2 必須包含至少 2 個數值",
           ToolErrorType.VALIDATION_ERROR,
@@ -122,9 +138,9 @@ export class PerformTTestTool extends BaseTool {
       }
 
       if (
-        params.data.paired &&
-        (!params.data.sample2 ||
-          params.data.sample1.length !== params.data.sample2.length)
+        normalizedParams.data.paired &&
+        (!normalizedParams.data.sample2 ||
+          normalizedParams.data.sample1.length !== normalizedParams.data.sample2.length)
       ) {
         throw new ToolExecutionError(
           "配對檢定要求兩組樣本大小相同",
@@ -134,19 +150,19 @@ export class PerformTTestTool extends BaseTool {
 
       // 執行統計檢定
       const result = await statService.performTTest(
-        params.data,
-        params.context || {},
+        normalizedParams.data,
+        normalizedParams.context || {},
       );
 
       // 生成詳細報告
-      const report = this.generateTTestReport(result, params);
+      const report = this.generateTTestReport(result, normalizedParams);
 
       // 記錄執行資訊
       logger.info("T檢定執行成功", {
         toolName: this.name,
         testType: result.test_type,
         pValue: result.p_value,
-        significant: result.p_value < (params.data.alpha || 0.05),
+        significant: result.p_value < (normalizedParams.data.alpha || 0.05),
       });
 
       return {
@@ -246,6 +262,49 @@ export class PerformTTestTool extends BaseTool {
     }
 
     return report;
+  }
+
+  /**
+   * 正規化參數格式（向後兼容處理）
+   * @param {Object} params - 原始參數
+   * @returns {Object} 正規化後的參數
+   */
+  normalizeParameters(params) {
+    // 如果已經是新格式（包含 data 物件），直接返回
+    if (params.data) {
+      return params;
+    }
+
+    // 舊格式轉換為新格式
+    logger.info("檢測到舊格式參數，正在轉換為新格式...");
+    
+    const normalizedParams = {
+      data: {
+        sample1: params.sample1 || [],
+        sample2: params.sample2 || null,
+        paired: params.paired || false,
+        alpha: params.alpha || 0.05,
+        alternative: params.alternative || "two-sided"
+      },
+      context: {
+        scenario: params.scenario || "statistical_analysis",
+        description: params.description || "統計檢定分析",
+        variable_names: {
+          sample1_name: params.sample1_name || "樣本1",
+          sample2_name: params.sample2_name || "樣本2"
+        }
+      }
+    };
+
+    logger.info("參數格式轉換完成", {
+      originalKeys: Object.keys(params),
+      normalizedStructure: {
+        data: Object.keys(normalizedParams.data),
+        context: Object.keys(normalizedParams.context)
+      }
+    });
+
+    return normalizedParams;
   }
 
   /**

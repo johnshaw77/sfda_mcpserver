@@ -98,6 +98,10 @@ export class SearchEmployeesTool extends BaseTool {
         },
         required: [],
       },
+      {
+        module: "hr",
+        requiredDatabases: ["qms"],
+      },
     );
   }
 

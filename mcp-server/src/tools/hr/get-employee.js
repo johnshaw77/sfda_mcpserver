@@ -84,6 +84,8 @@ export class GetEmployeeTool extends BaseTool {
       },
       {
         cacheable: false, // 停用快取，避免個人資料被誤用
+        module: "hr", // 設定模組
+        requiredDatabases: ["qms"], // 需要 QMS 資料庫
       },
     );
   }

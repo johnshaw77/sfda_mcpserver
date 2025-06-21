@@ -46,6 +46,8 @@ export class GetCountByTool extends BaseTool {
       {
         cacheable: true,
         cacheExpiry: 60 * 5, // 5 分鐘
+        module: "mil",
+        requiredDatabases: ["mil"],
       },
     );
   }

@@ -55,6 +55,10 @@ export class GetEmployeeCountTool extends BaseTool {
         },
         required: [],
       },
+      {
+        module: "hr",
+        requiredDatabases: ["qms"],
+      },
     );
   }
 

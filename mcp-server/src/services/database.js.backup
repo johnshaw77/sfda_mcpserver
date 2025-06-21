@@ -33,7 +33,7 @@ class DatabaseService {
           logger.info("初始化 QMS 資料庫連接池...", {
             config: JSON.stringify(config.dbConfig.qms),
           });
-
+          
           const qmsPool = mysql.createPool({
             ...config.dbConfig.qms,
             waitForConnections: true,
@@ -109,22 +109,17 @@ class DatabaseService {
       }
 
       // 檢查至少有一個資料庫連接成功
-      const hasAnyConnection = Object.values(initResults).some(
-        result => result === true,
-      );
-
+      const hasAnyConnection = Object.values(initResults).some(result => result === true);
+      
       if (hasAnyConnection) {
         this.isInitialized = true;
         logger.info("資料庫服務部分初始化完成", { results: initResults });
       } else {
         logger.warn("所有資料庫連接均失敗，某些功能可能不可用");
         this.isInitialized = false;
-
+        
         // 在生產環境中可以選擇是否要拋出錯誤
-        if (
-          process.env.NODE_ENV === "production" &&
-          process.env.REQUIRE_DB === "true"
-        ) {
+        if (process.env.NODE_ENV === "production" && process.env.REQUIRE_DB === "true") {
           throw new Error("資料庫連接失敗");
         }
       }
@@ -142,10 +137,7 @@ class DatabaseService {
       this.connectionError = error;
       this.isInitialized = false;
 
-      if (
-        process.env.NODE_ENV === "production" &&
-        process.env.REQUIRE_DB === "true"
-      ) {
+      if (process.env.NODE_ENV === "production" && process.env.REQUIRE_DB === "true") {
         throw error;
       } else {
         console.warn(

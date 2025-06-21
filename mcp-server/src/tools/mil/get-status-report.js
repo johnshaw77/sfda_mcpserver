@@ -38,6 +38,8 @@ export class GetStatusReportTool extends BaseTool {
       {
         cacheable: true,
         cacheExpiry: 60 * 60, // 1 小時
+        module: "mil",
+        requiredDatabases: ["mil"],
       },
     );
   }

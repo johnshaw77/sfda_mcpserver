@@ -6,6 +6,7 @@
 
 import hrRoutes from "./hr-routes.js";
 import milRoutes from "./mil-routes.js";
+import statRoutes from "./stat-routes.js";
 import logger from "../config/logger.js";
 
 /**
@@ -23,6 +24,10 @@ export function registerAllRoutes(app, toolManager) {
   // 註冊 MIL 模組路由
   app.use("/api/mil", milRoutes);
   logger.info("MIL module routes registered at /api/mil");
+
+  // 註冊 STAT 模組路由
+  app.use("/api/stat", statRoutes);
+  logger.info("STAT module routes registered at /api/stat");
 
   logger.info("All module routes registered successfully");
 }
