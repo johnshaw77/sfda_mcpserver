@@ -1,0 +1,527 @@
+const config = require("../config");
+const logger = require("./utils/logger");
+const dbConnection = require("./database/connection");
+const FileWatcher = require("./monitor/file-watcher");
+const DocumentProcessor = require("./processor/document-processor");
+const SummaryService = require("./services/summary-service");
+const DatabaseMigration = require("./database/migrations/migrate");
+
+class KessApplication {
+  constructor() {
+    this.fileWatcher = null;
+    this.documentProcessor = null;
+    this.summaryService = null;
+    this.isRunning = false;
+    this.processingQueue = [];
+    this.isProcessing = false;
+  }
+
+  /**
+   * 初始化應用程式
+   */
+  async initialize() {
+    try {
+      logger.info("KESS 系統初始化開始...");
+
+      // 1. 初始化資料庫連線
+      await this.initializeDatabase();
+
+      // 2. 初始化各個服務
+      await this.initializeServices();
+
+      // 3. 設定事件監聽器
+      this.setupEventListeners();
+
+      logger.info("KESS 系統初始化完成");
+    } catch (error) {
+      logger.logError("KESS 系統初始化失敗", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 初始化資料庫
+   */
+  async initializeDatabase() {
+    try {
+      logger.logProcessing("DB_INIT", "初始化資料庫連線...");
+
+      // 初始化連線
+      await dbConnection.initialize();
+
+      // 執行資料庫遷移
+      const migration = new DatabaseMigration();
+      const tableStatus = await migration.checkTables();
+
+      // 檢查是否需要遷移
+      const missingTables = Object.entries(tableStatus)
+        .filter(([table, exists]) => !exists)
+        .map(([table]) => table);
+
+      if (missingTables.length > 0) {
+        logger.logProcessing(
+          "DB_MIGRATE",
+          `需要建立表格: ${missingTables.join(", ")}`
+        );
+        await migration.migrate();
+      }
+
+      // 初始化監控資料夾設定
+      await migration.initializeWatchedFolders(config.monitoring.watchFolders);
+
+      logger.logProcessing("DB_INIT", "資料庫初始化完成");
+    } catch (error) {
+      logger.logError("資料庫初始化失敗", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 初始化各個服務
+   */
+  async initializeServices() {
+    try {
+      logger.logProcessing("SERVICE_INIT", "初始化服務模組...");
+
+      // 初始化文件處理器
+      this.documentProcessor = new DocumentProcessor();
+
+      // 初始化摘要服務
+      this.summaryService = new SummaryService();
+      await this.summaryService.initialize();
+
+      // 初始化檔案監控器
+      this.fileWatcher = new FileWatcher();
+
+      logger.logProcessing("SERVICE_INIT", "服務模組初始化完成");
+    } catch (error) {
+      logger.logError("服務初始化失敗", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 設定事件監聽器
+   */
+  setupEventListeners() {
+    try {
+      logger.logProcessing("EVENT_SETUP", "設定事件監聽器...");
+
+      // 檔案變更事件
+      this.fileWatcher.on("fileEvent", async (eventData) => {
+        await this.handleFileEvent(eventData);
+      });
+
+      // 錯誤事件
+      this.fileWatcher.on("error", (error) => {
+        logger.logError("檔案監控器發生錯誤", error);
+      });
+
+      // 系統訊號處理
+      process.on("SIGINT", () => {
+        logger.info("收到 SIGINT 訊號，正在關閉系統...");
+        this.shutdown();
+      });
+
+      process.on("SIGTERM", () => {
+        logger.info("收到 SIGTERM 訊號，正在關閉系統...");
+        this.shutdown();
+      });
+
+      logger.logProcessing("EVENT_SETUP", "事件監聽器設定完成");
+    } catch (error) {
+      logger.logError("事件監聽器設定失敗", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 啟動應用程式
+   */
+  async start() {
+    try {
+      if (this.isRunning) {
+        logger.warn("KESS 系統已在執行中");
+        return;
+      }
+
+      logger.info("啟動 KESS 系統...");
+
+      // 檢查並掛載網路磁碟機
+      if (config.monitoring.networkMonitoring) {
+        await this.setupNetworkDrives();
+      }
+
+      // 開始檔案監控
+      if (config.processing.enableRealTimeMonitoring) {
+        await this.fileWatcher.startWatching();
+      }
+
+      // 初始掃描現有檔案
+      await this.performInitialScan();
+
+      // 啟動處理佇列
+      this.startProcessingQueue();
+
+      this.isRunning = true;
+      logger.info("KESS 系統啟動完成");
+
+      // 顯示系統狀態
+      this.logSystemStatus();
+    } catch (error) {
+      logger.logError("KESS 系統啟動失敗", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 執行初始檔案掃描
+   */
+  async performInitialScan() {
+    try {
+      logger.logProcessing("INITIAL_SCAN", "開始初始檔案掃描...");
+
+      for (const folder of config.monitoring.watchFolders) {
+        await this.fileWatcher.scanExistingFiles(folder);
+      }
+
+      logger.logProcessing("INITIAL_SCAN", "初始檔案掃描完成");
+    } catch (error) {
+      logger.logError("初始檔案掃描失敗", error);
+    }
+  }
+
+  /**
+   * 處理檔案事件
+   * @param {Object} eventData - 檔案事件資料
+   */
+  async handleFileEvent(eventData) {
+    try {
+      const { eventType, filePath, fileInfo } = eventData;
+
+      logger.logProcessing("FILE_EVENT", `處理檔案事件: ${eventType}`, {
+        filePath: filePath,
+        fileName: fileInfo.fileName,
+      });
+
+      // 將檔案加入處理佇列
+      this.processingQueue.push({
+        ...eventData,
+        addedAt: new Date(),
+        attempts: 0,
+      });
+
+      logger.logProcessing(
+        "QUEUE_ADD",
+        `檔案加入處理佇列: ${fileInfo.fileName}`,
+        {
+          queueLength: this.processingQueue.length,
+        }
+      );
+    } catch (error) {
+      logger.logError(`處理檔案事件失敗: ${eventData.filePath}`, error);
+    }
+  }
+
+  /**
+   * 啟動處理佇列
+   */
+  startProcessingQueue() {
+    if (this.isProcessing) {
+      return;
+    }
+
+    this.isProcessing = true;
+
+    const processQueue = async () => {
+      while (this.isRunning && this.processingQueue.length > 0) {
+        const batchSize = Math.min(
+          config.processing.batchSize,
+          this.processingQueue.length
+        );
+        const batch = this.processingQueue.splice(0, batchSize);
+
+        try {
+          await this.processBatch(batch);
+        } catch (error) {
+          logger.logError("批次處理失敗", error);
+        }
+
+        // 處理延遲
+        if (config.processing.processingDelay > 0) {
+          await this.delay(config.processing.processingDelay);
+        }
+      }
+
+      // 如果佇列為空，等待一段時間後再檢查
+      if (this.isRunning) {
+        setTimeout(processQueue, 5000);
+      }
+    };
+
+    processQueue();
+  }
+
+  /**
+   * 處理檔案批次
+   * @param {Array} batch - 檔案批次
+   */
+  async processBatch(batch) {
+    try {
+      logger.logProcessing(
+        "BATCH_PROCESS",
+        `開始處理批次: ${batch.length} 個檔案`
+      );
+
+      for (const item of batch) {
+        try {
+          await this.processFile(item);
+        } catch (error) {
+          logger.logError(`處理檔案失敗: ${item.filePath}`, error);
+
+          // 重試機制
+          item.attempts++;
+          if (item.attempts < config.processing.retryAttempts) {
+            this.processingQueue.push(item);
+            logger.logProcessing(
+              "RETRY",
+              `檔案重新加入佇列: ${item.fileInfo.fileName}`,
+              {
+                attempts: item.attempts,
+                maxAttempts: config.processing.retryAttempts,
+              }
+            );
+          }
+        }
+      }
+
+      logger.logProcessing(
+        "BATCH_COMPLETE",
+        `批次處理完成: ${batch.length} 個檔案`
+      );
+    } catch (error) {
+      logger.logError("批次處理發生錯誤", error);
+    }
+  }
+
+  /**
+   * 處理單一檔案
+   * @param {Object} item - 檔案項目
+   */
+  async processFile(item) {
+    const startTime = Date.now();
+    const { eventType, filePath, fileInfo } = item;
+
+    try {
+      logger.logProcessing(
+        "FILE_PROCESS",
+        `開始處理檔案: ${fileInfo.fileName}`,
+        {
+          eventType: eventType,
+          fileSize: fileInfo.fileSize,
+        }
+      );
+
+      if (eventType === "delete") {
+        // 處理檔案刪除
+        await this.handleFileDelete(filePath);
+      } else {
+        // 處理檔案新增或修改
+        await this.handleFileAddOrChange(filePath, fileInfo, eventType);
+      }
+
+      const processingTime = Date.now() - startTime;
+      logger.logPerformance("FILE_PROCESS", processingTime, {
+        fileName: fileInfo.fileName,
+        eventType: eventType,
+      });
+    } catch (error) {
+      logger.logError(`檔案處理失敗: ${filePath}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 處理檔案刪除
+   * @param {string} filePath - 檔案路徑
+   */
+  async handleFileDelete(filePath) {
+    try {
+      // 更新資料庫中的文件狀態
+      await dbConnection.query(
+        "UPDATE kess_documents SET processing_status = 'deleted', updated_at = NOW() WHERE file_path = ?",
+        [filePath]
+      );
+
+      logger.logProcessing("FILE_DELETE", `檔案刪除處理完成: ${filePath}`);
+    } catch (error) {
+      logger.logError(`處理檔案刪除失敗: ${filePath}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 處理檔案新增或修改
+   * @param {string} filePath - 檔案路徑
+   * @param {Object} fileInfo - 檔案資訊
+   * @param {string} eventType - 事件類型
+   */
+  async handleFileAddOrChange(filePath, fileInfo, eventType) {
+    try {
+      // 1. 使用文件處理器處理檔案
+      const documentData = await this.documentProcessor.processFile(
+        filePath,
+        fileInfo
+      );
+
+      // 2. 儲存或更新文件記錄
+      const documentId = await this.saveDocumentRecord(documentData, eventType);
+
+      // 3. 生成摘要
+      if (documentData.content && documentData.content.trim().length > 0) {
+        await this.summaryService.generateSummary(documentId, documentData);
+      }
+
+      logger.logProcessing(
+        "FILE_COMPLETE",
+        `檔案處理完成: ${fileInfo.fileName}`,
+        {
+          documentId: documentId,
+          contentLength: documentData.content ? documentData.content.length : 0,
+        }
+      );
+    } catch (error) {
+      logger.logError(`處理檔案新增/修改失敗: ${filePath}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 儲存文件記錄
+   * @param {Object} documentData - 文件資料
+   * @param {string} eventType - 事件類型
+   * @returns {number} 文件 ID
+   */
+  async saveDocumentRecord(documentData, eventType) {
+    try {
+      // 檢查文件是否已存在
+      const existing = await dbConnection.query(
+        "SELECT id FROM kess_documents WHERE file_path = ? AND file_hash = ?",
+        [documentData.filePath, documentData.fileHash]
+      );
+
+      if (existing.length > 0) {
+        // 更新現有記錄
+        await dbConnection.query(
+          `
+          UPDATE kess_documents SET 
+            file_modified_time = ?,
+            content_preview = ?,
+            processing_status = 'completed',
+            updated_at = NOW()
+          WHERE id = ?
+        `,
+          [
+            documentData.fileModifiedTime,
+            documentData.contentPreview,
+            existing[0].id,
+          ]
+        );
+
+        return existing[0].id;
+      } else {
+        // 新增記錄
+        const result = await dbConnection.query(
+          `
+          INSERT INTO kess_documents (
+            file_path, file_name, file_extension, file_size, file_hash,
+            file_modified_time, content_preview, processing_status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')
+        `,
+          [
+            documentData.filePath,
+            documentData.fileName,
+            documentData.fileExtension,
+            documentData.fileSize,
+            documentData.fileHash,
+            documentData.fileModifiedTime,
+            documentData.contentPreview,
+          ]
+        );
+
+        return result.insertId;
+      }
+    } catch (error) {
+      logger.logError("儲存文件記錄失敗", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 關閉應用程式
+   */
+  async shutdown() {
+    try {
+      logger.info("正在關閉 KESS 系統...");
+
+      this.isRunning = false;
+
+      // 停止檔案監控
+      if (this.fileWatcher) {
+        await this.fileWatcher.stopWatching();
+      }
+
+      // 等待處理佇列完成
+      let waitCount = 0;
+      while (this.processingQueue.length > 0 && waitCount < 30) {
+        logger.info(
+          `等待處理佇列完成... 剩餘: ${this.processingQueue.length} 個檔案`
+        );
+        await this.delay(1000);
+        waitCount++;
+      }
+
+      // 關閉資料庫連線
+      if (dbConnection.isReady()) {
+        await dbConnection.close();
+      }
+
+      logger.info("KESS 系統已關閉");
+      process.exit(0);
+    } catch (error) {
+      logger.logError("系統關閉時發生錯誤", error);
+      process.exit(1);
+    }
+  }
+
+  /**
+   * 記錄系統狀態
+   */
+  logSystemStatus() {
+    const status = {
+      isRunning: this.isRunning,
+      fileWatcher: this.fileWatcher ? this.fileWatcher.getStatus() : null,
+      processingQueue: {
+        length: this.processingQueue.length,
+        isProcessing: this.isProcessing,
+      },
+      config: {
+        watchFolders: config.monitoring.watchFolders,
+        llmProvider: config.llm.provider,
+        realtimeMonitoring: config.processing.enableRealTimeMonitoring,
+      },
+    };
+
+    logger.logProcessing("SYSTEM_STATUS", "系統狀態", status);
+  }
+
+  /**
+   * 延遲函數
+   * @param {number} ms - 延遲毫秒數
+   */
+  delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+}
+
+module.exports = KessApplication;
