@@ -77,6 +77,32 @@ export class GetMILListTool extends BaseTool {
             description: "最大延遲天數（選填）- 查詢延遲天數小於等於此值的 MIL",
             example: 30,
           },
+          driName: {
+            type: "string",
+            description: "負責人姓名（選填），支援模糊查詢",
+            example: "張三",
+          },
+          driEmpNo: {
+            type: "string",
+            description: "負責人工號（選填）",
+            example: "U0700034",
+          },
+          driDept: {
+            type: "string",
+            description: "負責部門（選填）",
+            example: "品保處",
+          },
+          location: {
+            type: "string",
+            description: "地點/區域（選填），支援模糊查詢",
+            example: "A棟2F",
+          },
+          isApply: {
+            type: "string",
+            description: "是否已申請結案（選填）",
+            enum: ["Y", "N"],
+            example: "Y",
+          },
           page: {
             type: "integer",
             description: "頁數（選填，預設 1）",
@@ -121,6 +147,17 @@ export class GetMILListTool extends BaseTool {
         filters.delayDayMin = params.delayDayMin;
       if (params.delayDayMax !== undefined)
         filters.delayDayMax = params.delayDayMax;
+
+      // 負責人相關參數
+      if (params.driName) filters.driName = params.driName;
+      if (params.driEmpNo) filters.driEmpNo = params.driEmpNo;
+      if (params.driDept) filters.driDept = params.driDept;
+
+      // 地點相關參數
+      if (params.location) filters.location = params.location;
+
+      // 申請結案狀態參數
+      if (params.isApply) filters.isApply = params.isApply;
 
       // 分頁參數
       const page = params.page || 1;

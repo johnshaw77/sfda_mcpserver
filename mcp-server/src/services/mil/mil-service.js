@@ -18,20 +18,32 @@ class MILService {
    * @param {number} page - 頁數 (預設為 1)
    * @param {number} limit - 每頁返回結果數量限制 (預設為 20)
    * @param {string} sort - 排序欄位 (預設為 RecordDate)
+   * @param {string} status - MIL 處理狀態 (預設為 "OnGoing"，可選值: "OnGoing", "Closed")
    */
-  async getMILList(filters = {}, page = 1, limit = 20, sort = "RecordDate") {
+  async getMILList(
+    filters = {},
+    page = 1,
+    limit = 20,
+    sort = "RecordDate",
+    status = "OnGoing",
+  ) {
     try {
-      console.log("getMILList");
+      console.log("getMILList", { status });
       // 構建 WHERE 條件
       const whereConditions = [];
+
+      // 添加 status 參數處理
+      if (status) {
+        whereConditions.push("Status = @status");
+      }
 
       // MIL Typename
       if (filters.typeName) {
         whereConditions.push("TypeName=@typeName");
       }
-      // MIL 處理狀態篩選
+      // MIL 處理狀態篩選 (保留原有的 filters.status 支持)
       if (filters.status) {
-        whereConditions.push("Status = @status");
+        whereConditions.push("Status = @filterStatus");
       }
 
       // 提案廠別篩選
@@ -66,6 +78,27 @@ class MILService {
         whereConditions.push("DelayDay >= @delayDay");
       }
 
+      // 負責人相關篩選
+      if (filters.driName) {
+        whereConditions.push("DRI_EmpName LIKE @driName");
+      }
+      if (filters.driEmpNo) {
+        whereConditions.push("DRI_EmpNo = @driEmpNo");
+      }
+      if (filters.driDept) {
+        whereConditions.push("DRI_Dept = @driDept");
+      }
+
+      // 地點相關篩選
+      if (filters.location) {
+        whereConditions.push("Location LIKE @location");
+      }
+
+      // 申請結案狀態篩選
+      if (filters.isApply) {
+        whereConditions.push("is_APPLY = @isApply");
+      }
+
       // 建構 WHERE 子句
       const whereClause =
         whereConditions.length > 0
@@ -96,7 +129,7 @@ class MILService {
 
       // 執行主要查詢
       const mainRequest = databaseService.getPool(this.dbName).request();
-      this.setQueryParameters(mainRequest, filters);
+      this.setQueryParameters(mainRequest, filters, status);
       // 添加分頁參數
       mainRequest.input("offset", offset);
       mainRequest.input("limit", limit);
@@ -104,7 +137,7 @@ class MILService {
 
       // 執行計數查詢
       const countRequest = databaseService.getPool(this.dbName).request();
-      this.setQueryParameters(countRequest, filters);
+      this.setQueryParameters(countRequest, filters, status);
       const countResult = await countRequest.query(countQuery);
 
       const totalRecords = countResult.recordset[0].total;
@@ -115,6 +148,7 @@ class MILService {
         totalRecords: totalRecords,
         page: page,
         totalPages: totalPages,
+        status: status,
         filters: JSON.stringify(filters),
       });
 
@@ -125,6 +159,7 @@ class MILService {
         currentPage: page,
         totalPages: totalPages,
         limit: limit,
+        status: status,
         timestamp: new Date().toISOString(),
         filters: filters,
         data: result.recordset, // 統一字段
@@ -142,14 +177,21 @@ class MILService {
    * 設定查詢參數的輔助方法
    * @param {Object} request - MSSQL request 物件
    * @param {Object} filters - 篩選條件
+   * @param {string} status - MIL 處理狀態
    */
-  setQueryParameters(request, filters) {
+  setQueryParameters(request, filters, status) {
+    // 添加 status 參數
+    if (status) {
+      request.input("status", status);
+    }
+
     if (filters.typeName) {
       request.input("typeName", filters.typeName);
     }
 
+    // 保留原有的 filters.status 支持，使用不同的參數名避免衝突
     if (filters.status) {
-      request.input("status", filters.status);
+      request.input("filterStatus", filters.status);
     }
 
     if (filters.proposalFactory) {
@@ -178,6 +220,27 @@ class MILService {
     // 向後兼容
     if (filters.delayDay !== undefined) {
       request.input("delayDay", filters.delayDay);
+    }
+
+    // 負責人相關參數
+    if (filters.driName) {
+      request.input("driName", "%" + filters.driName + "%");
+    }
+    if (filters.driEmpNo) {
+      request.input("driEmpNo", filters.driEmpNo);
+    }
+    if (filters.driDept) {
+      request.input("driDept", filters.driDept);
+    }
+
+    // 地點相關參數
+    if (filters.location) {
+      request.input("location", "%" + filters.location + "%");
+    }
+
+    // 申請結案狀態參數
+    if (filters.isApply) {
+      request.input("isApply", filters.isApply);
     }
   }
 
