@@ -91,7 +91,7 @@ export class PerformANOVATool extends BaseTool {
         scenario: args.context?.scenario,
       });
 
-      // 驗證輸入
+      // 驗證輸入．
       this.validateInput(args);
 
       // 準備分析參數
