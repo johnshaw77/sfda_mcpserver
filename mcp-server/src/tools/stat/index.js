@@ -7,6 +7,7 @@
 import { PerformTTestTool } from "./perform-ttest.js";
 import { AnalyzeDataTool } from "./analyze-data.js";
 import { PerformChiSquareTool } from "./perform-chisquare.js";
+import { PerformANOVATool } from "./perform-anova.js";
 import { ParseCSVTTestTool } from "./parse-csv-ttest.js";
 
 // Stat 模組名稱
@@ -32,6 +33,7 @@ export const statTools = [
   createTool(PerformTTestTool),
   createTool(AnalyzeDataTool),
   createTool(PerformChiSquareTool),
+  createTool(PerformANOVATool),
   createTool(ParseCSVTTestTool),
 ];
 

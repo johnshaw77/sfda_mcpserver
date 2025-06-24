@@ -133,6 +133,35 @@ class StatService {
   }
 
   /**
+   * 執行 ANOVA 檢定（新版本，與其他檢定方法一致）
+   * @param {Object} data - 檢定數據
+   * @param {Array} data.groups - 各組數據
+   * @param {number} data.alpha - 顯著水準
+   * @returns {Object} 檢定結果
+   */
+  async performANOVATest(data) {
+    try {
+      logger.info("執行 ANOVA 檢定", {
+        groupCount: data.groups?.length,
+        alpha: data.alpha,
+      });
+
+      // 調用 FastAPI 進行統計計算
+      const apiResult = await this.callStatAPI("/inferential/anova", {
+        groups: data.groups,
+      });
+
+      return {
+        ...apiResult,
+        alpha: data.alpha || 0.05,
+      };
+    } catch (error) {
+      logger.error("ANOVA 檢定執行失敗", { error: error.message });
+      throw new Error(`ANOVA 檢定執行失敗: ${error.message}`);
+    }
+  }
+
+  /**
    * 智能分析 CSV 數據結構
    * @param {string} csvData - CSV 數據內容
    * @returns {Object} 數據分析結果
