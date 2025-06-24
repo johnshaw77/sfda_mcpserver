@@ -63,43 +63,51 @@ async function testFileProcessing() {
 
         // 先儲存文件記錄以獲取 ID
         logger.info("儲存文件記錄到資料庫...");
-        const pool = dbConnection.getPool();
-        const connection = await pool.getConnection();
+        const connection = await dbConnection.pool.getConnection();
 
-        try {
-          // 插入文件記錄
-          const [documentResult] = await connection.execute(
-            `INSERT INTO kess_documents 
-             (category_id, file_path, original_path, file_name, file_extension, 
-              file_size, file_hash, file_modified_time, content_preview, word_count, 
-              processing_status, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', NOW(), NOW())`,
-            [
-              1, // 預設分類 ID
-              documentData.filePath,
-              documentData.filePath,
-              documentData.fileName,
-              documentData.fileExtension,
-              documentData.fileSize,
-              documentData.fileHash,
-              documentData.fileModifiedTime,
-              documentData.content.substring(0, 500),
-              documentData.wordCount || 0,
-            ]
-          );
+        // 插入文件記錄
+        const [documentResult] = await connection.execute(
+          `INSERT INTO kess_documents 
+           (category_id, file_path, original_path, file_name, file_extension, 
+            file_size, file_hash, file_modified_time, content_preview, word_count, 
+            processing_status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', NOW(), NOW())`,
+          [
+            1, // 預設分類 ID
+            documentData.filePath,
+            documentData.filePath,
+            documentData.fileName,
+            documentData.fileExtension,
+            documentData.fileSize,
+            documentData.fileHash,
+            documentData.fileModifiedTime,
+            documentData.content.substring(0, 500),
+            documentData.wordCount || 0,
+          ]
+        );
 
-          const documentId = documentResult.insertId;
-          logger.info(`文件記錄已儲存，ID: ${documentId}`);
+        const documentId = documentResult.insertId;
+        logger.info(`文件記錄已儲存，ID: ${documentId}`);
 
-          // 生成摘要
-          logger.info("開始生成摘要...");
-          await summaryService.generateSummary(documentId, documentData);
-          logger.info("摘要生成完成並已儲存到資料庫");
+        // 生成摘要
+        logger.info("開始生成摘要...");
+        await summaryService.generateSummary(documentId, documentData);
+        logger.info("摘要生成完成並已儲存到資料庫");
 
-          logger.info(`✅ 檔案 "${testFile}" 處理完成\n`);
-        } finally {
-          connection.release();
-        }
+        // 更新處理狀態為完成
+        await connection.execute(
+          "UPDATE kess_documents SET processing_status = 'completed' WHERE id = ?",
+          [documentId]
+        );
+
+        // 執行歸檔
+        logger.info("開始執行檔案歸檔...");
+        documentData.id = documentId;
+        await documentProcessor.archiveProcessedFile(fullPath, documentData);
+        logger.info("檔案歸檔完成");
+
+        connection.release();
+        logger.info(`✅ 檔案 "${testFile}" 處理完成\n`);
       } catch (error) {
         logger.logError(`處理檔案失敗: ${testFile}`, error);
       }

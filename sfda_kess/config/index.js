@@ -74,6 +74,17 @@ const config = {
     cronSchedule: process.env.CRON_SCHEDULE || "0 */6 * * *", // 每6小時執行一次
   },
 
+  // 檔案歸檔設定
+  archiving: {
+    enabled: process.env.ENABLE_FILE_ARCHIVING === "true",
+    basePath: process.env.ARCHIVE_BASE_PATH || "./demo-data/archived",
+    byCategory: process.env.ARCHIVE_BY_CATEGORY === "true",
+    byDate: process.env.ARCHIVE_BY_DATE === "true",
+    createBackup: process.env.CREATE_BACKUP === "true",
+    retryAttempts: parseInt(process.env.ARCHIVE_RETRY_ATTEMPTS) || 3,
+    retryDelay: parseInt(process.env.ARCHIVE_RETRY_DELAY) || 1000,
+  },
+
   // 日誌設定
   logging: {
     level: process.env.LOG_LEVEL || "info",

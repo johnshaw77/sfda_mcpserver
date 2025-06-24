@@ -61,7 +61,7 @@ class FileWatcher extends EventEmitter {
       const watchOptions = {
         ignored: config.monitoring.ignorePatterns,
         persistent: true,
-        ignoreInitial: false, // 初始化時也要處理現有檔案
+        ignoreInitial: true, // 設為 true，避免初始化時重複處理現有檔案
         followSymlinks: false,
         depth: undefined, // 無限制深度
         awaitWriteFinish: {

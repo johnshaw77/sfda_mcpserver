@@ -160,10 +160,12 @@ class KessApplication {
       // 初始掃描現有檔案
       await this.performInitialScan();
 
+      // 設定系統運行狀態（必須在啟動處理佇列之前）
+      this.isRunning = true;
+
       // 啟動處理佇列
       this.startProcessingQueue();
 
-      this.isRunning = true;
       logger.info("KESS 系統啟動完成");
 
       // 顯示系統狀態
@@ -202,6 +204,7 @@ class KessApplication {
       logger.logProcessing("FILE_EVENT", `處理檔案事件: ${eventType}`, {
         filePath: filePath,
         fileName: fileInfo.fileName,
+        currentQueueLength: this.processingQueue.length,
       });
 
       // 將檔案加入處理佇列
@@ -216,8 +219,17 @@ class KessApplication {
         `檔案加入處理佇列: ${fileInfo.fileName}`,
         {
           queueLength: this.processingQueue.length,
+          isProcessing: this.isProcessing,
+          isRunning: this.isRunning,
         }
       );
+
+      // 檢查處理佇列是否需要重新啟動
+      if (!this.isProcessing && this.isRunning) {
+        logger.logProcessing("QUEUE_RESTART", "處理佇列已停止，重新啟動");
+        this.isProcessing = false;
+        this.startProcessingQueue();
+      }
     } catch (error) {
       logger.logError(`處理檔案事件失敗: ${eventData.filePath}`, error);
     }
@@ -228,38 +240,64 @@ class KessApplication {
    */
   startProcessingQueue() {
     if (this.isProcessing) {
+      logger.warn("處理佇列已在執行中");
       return;
     }
 
     this.isProcessing = true;
+    logger.logProcessing("QUEUE_START", "啟動處理佇列");
 
     const processQueue = async () => {
-      while (this.isRunning && this.processingQueue.length > 0) {
-        const batchSize = Math.min(
-          config.processing.batchSize,
-          this.processingQueue.length
-        );
-        const batch = this.processingQueue.splice(0, batchSize);
+      try {
+        logger.logProcessing("QUEUE_CHECK", `檢查處理佇列`, {
+          queueLength: this.processingQueue.length,
+          isRunning: this.isRunning,
+        });
 
-        try {
-          await this.processBatch(batch);
-        } catch (error) {
-          logger.logError("批次處理失敗", error);
+        while (this.isRunning && this.processingQueue.length > 0) {
+          const batchSize = Math.min(
+            config.processing.batchSize,
+            this.processingQueue.length
+          );
+          const batch = this.processingQueue.splice(0, batchSize);
+
+          logger.logProcessing("QUEUE_PROCESSING", `處理批次`, {
+            batchSize: batch.length,
+            remainingQueue: this.processingQueue.length,
+          });
+
+          try {
+            await this.processBatch(batch);
+          } catch (error) {
+            logger.logError("批次處理失敗", error);
+          }
+
+          // 處理延遲
+          if (config.processing.processingDelay > 0) {
+            await this.delay(config.processing.processingDelay);
+          }
         }
 
-        // 處理延遲
-        if (config.processing.processingDelay > 0) {
-          await this.delay(config.processing.processingDelay);
+        // 如果佇列為空，等待一段時間後再檢查
+        if (this.isRunning) {
+          logger.logProcessing("QUEUE_WAIT", `佇列為空，等待 5 秒後再檢查`);
+          setTimeout(processQueue, 5000);
+        } else {
+          logger.logProcessing("QUEUE_STOP", "系統已停止，結束處理佇列");
         }
-      }
-
-      // 如果佇列為空，等待一段時間後再檢查
-      if (this.isRunning) {
-        setTimeout(processQueue, 5000);
+      } catch (error) {
+        logger.logError("處理佇列發生錯誤", error);
+        // 發生錯誤時，等待一段時間後重試
+        if (this.isRunning) {
+          setTimeout(processQueue, 10000);
+        }
       }
     };
 
-    processQueue();
+    // 立即開始處理佇列
+    processQueue().catch((error) => {
+      logger.logError("啟動處理佇列失敗", error);
+    });
   }
 
   /**
@@ -397,6 +435,104 @@ class KessApplication {
   }
 
   /**
+   * 根據檔案路徑和內容判斷分類
+   * @param {string} filePath - 檔案路徑
+   * @param {string} content - 檔案內容
+   * @returns {Promise<number>} 分類 ID
+   */
+  async getCategoryId(filePath, content = "") {
+    try {
+      // 預設使用通用分類
+      let categoryCode = "GENERAL";
+
+      // 根據檔案路徑判斷分類
+      const pathLower = filePath.toLowerCase();
+      if (
+        pathLower.includes("品質") ||
+        pathLower.includes("quality") ||
+        pathLower.includes("qa")
+      ) {
+        categoryCode = "QA";
+      } else if (
+        pathLower.includes("製造") ||
+        pathLower.includes("manufacturing") ||
+        pathLower.includes("生產")
+      ) {
+        categoryCode = "MFG";
+      } else if (
+        pathLower.includes("資訊") ||
+        pathLower.includes("it") ||
+        pathLower.includes("系統")
+      ) {
+        categoryCode = "IT";
+      } else if (
+        pathLower.includes("人資") ||
+        pathLower.includes("hr") ||
+        pathLower.includes("human")
+      ) {
+        categoryCode = "HR";
+      } else if (
+        pathLower.includes("財務") ||
+        pathLower.includes("finance") ||
+        pathLower.includes("會計")
+      ) {
+        categoryCode = "FIN";
+      } else if (
+        pathLower.includes("研發") ||
+        pathLower.includes("r&d") ||
+        pathLower.includes("開發")
+      ) {
+        categoryCode = "R&D";
+      } else if (
+        pathLower.includes("行政") ||
+        pathLower.includes("admin") ||
+        pathLower.includes("管理")
+      ) {
+        categoryCode = "ADMIN";
+      }
+
+      // 根據內容進一步判斷（如果有內容的話）
+      if (content && categoryCode === "GENERAL") {
+        const contentLower = content.toLowerCase();
+        if (
+          contentLower.includes("品質") ||
+          contentLower.includes("稽核") ||
+          contentLower.includes("檢驗")
+        ) {
+          categoryCode = "QA";
+        } else if (
+          contentLower.includes("製造") ||
+          contentLower.includes("生產") ||
+          contentLower.includes("工程")
+        ) {
+          categoryCode = "MFG";
+        }
+      }
+
+      // 查詢分類 ID
+      const result = await dbConnection.query(
+        "SELECT id FROM kess_categories WHERE category_code = ? AND is_active = TRUE",
+        [categoryCode]
+      );
+
+      if (result && result.length > 0) {
+        return result[0].id;
+      } else {
+        // 如果找不到分類，使用通用分類
+        const fallbackResult = await dbConnection.query(
+          "SELECT id FROM kess_categories WHERE category_code = 'GENERAL' AND is_active = TRUE"
+        );
+        return fallbackResult && fallbackResult.length > 0
+          ? fallbackResult[0].id
+          : 1;
+      }
+    } catch (error) {
+      logger.logError("取得分類 ID 失敗", error);
+      return 1; // 預設返回 ID 1
+    }
+  }
+
+  /**
    * 儲存文件記錄
    * @param {Object} documentData - 文件資料
    * @param {string} eventType - 事件類型
@@ -404,6 +540,12 @@ class KessApplication {
    */
   async saveDocumentRecord(documentData, eventType) {
     try {
+      // 取得分類 ID
+      const categoryId = await this.getCategoryId(
+        documentData.filePath,
+        documentData.contentPreview
+      );
+
       // 檢查文件是否已存在
       const existing = await dbConnection.query(
         "SELECT id FROM kess_documents WHERE file_path = ? AND file_hash = ?",
@@ -415,15 +557,19 @@ class KessApplication {
         await dbConnection.query(
           `
           UPDATE kess_documents SET 
+            category_id = ?,
             file_modified_time = ?,
             content_preview = ?,
+            word_count = ?,
             processing_status = 'completed',
             updated_at = NOW()
           WHERE id = ?
         `,
           [
+            categoryId,
             documentData.fileModifiedTime,
             documentData.contentPreview,
+            documentData.wordCount || 0,
             existing[0].id,
           ]
         );
@@ -434,18 +580,21 @@ class KessApplication {
         const result = await dbConnection.query(
           `
           INSERT INTO kess_documents (
-            file_path, file_name, file_extension, file_size, file_hash,
-            file_modified_time, content_preview, processing_status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')
+            category_id, file_path, original_path, file_name, file_extension, file_size, file_hash,
+            file_modified_time, content_preview, word_count, processing_status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')
         `,
           [
+            categoryId,
             documentData.filePath,
+            documentData.filePath, // original_path 同 file_path
             documentData.fileName,
             documentData.fileExtension,
             documentData.fileSize,
             documentData.fileHash,
             documentData.fileModifiedTime,
             documentData.contentPreview,
+            documentData.wordCount || 0,
           ]
         );
 

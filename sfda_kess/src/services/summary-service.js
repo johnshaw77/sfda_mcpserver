@@ -55,19 +55,42 @@ class SummaryService {
       );
 
       // 1. 準備提示詞
+      logger.info(`[PROMPT_BUILD] 開始建立提示詞 for ${documentData.fileName}`);
       const prompt = this.buildPrompt(documentData);
+      logger.info(`[PROMPT_BUILD] 提示詞建立完成，長度: ${prompt.length} 字元`);
 
       // 2. 呼叫 LLM 生成摘要
+      logger.info(`[LLM_CALL] 呼叫 LLM 服務 (${config.llm.provider})`);
       const summaryResult = await this.llmClient.generateSummary(
         prompt,
         documentData
       );
+      logger.info(`[LLM_CALL] LLM 服務回應完成`);
 
       // 3. 處理摘要結果
+      logger.info(`[SUMMARY_PROCESS] 開始處理摘要結果`);
       const processedSummary = this.processSummaryResult(summaryResult);
+      logger.info(`[SUMMARY_PROCESS] 摘要處理完成`);
+      logger.info(
+        `[SUMMARY_PROCESS] 摘要長度: ${processedSummary.summary.length} 字元`
+      );
+      logger.info(
+        `[SUMMARY_PROCESS] 關鍵點數量: ${processedSummary.keyPoints.length}`
+      );
+      logger.info(
+        `[SUMMARY_PROCESS] 關鍵字數量: ${processedSummary.keywords.length}`
+      );
+      logger.info(
+        `[SUMMARY_PROCESS] 文件類型: ${processedSummary.documentType}`
+      );
+      logger.info(
+        `[SUMMARY_PROCESS] 信心分數: ${processedSummary.confidenceScore}`
+      );
 
       // 4. 儲存摘要到資料庫
+      logger.info(`[DB_SAVE] 開始儲存摘要到資料庫`);
       await this.saveSummary(documentId, processedSummary, summaryResult);
+      logger.info(`[DB_SAVE] 摘要儲存完成`);
 
       const processingTime = Date.now() - startTime;
       logger.logPerformance("SUMMARY_COMPLETE", processingTime, {
@@ -75,6 +98,10 @@ class SummaryService {
         fileName: documentData.fileName,
         summaryLength: processedSummary.summary.length,
       });
+
+      logger.info(
+        `[SUMMARY_COMPLETE] 完整摘要生成流程結束，總耗時: ${processingTime}ms`
+      );
     } catch (error) {
       logger.logError(`生成摘要失敗: ${documentData.fileName}`, error);
 
@@ -100,17 +127,35 @@ class SummaryService {
    */
   processSummaryResult(summaryResult) {
     try {
+      logger.info(`[PARSE_START] 開始解析 LLM 回應結果`);
       const content = summaryResult.content || summaryResult.text || "";
+      logger.info(`[PARSE_START] 原始回應長度: ${content.length} 字元`);
 
       // 使用正規表達式解析結構化回應
+      logger.info(`[PARSE_SECTIONS] 開始解析各個章節`);
       const summary = this.extractSection(content, "文件摘要");
-      const keyPoints = this.extractKeyPoints(content);
-      const keywords = this.extractKeywords(content);
-      const entities = this.extractEntities(content);
-      const documentType = this.extractSection(content, "文件類型分類");
-      const confidenceScore = this.extractConfidenceScore(content);
+      logger.info(
+        `[PARSE_SECTIONS] 摘要章節: ${summary ? summary.length : 0} 字元`
+      );
 
-      return {
+      const keyPoints = this.extractKeyPoints(content);
+      logger.info(`[PARSE_SECTIONS] 關鍵點: ${keyPoints.length} 個`);
+
+      const keywords = this.extractKeywords(content);
+      logger.info(`[PARSE_SECTIONS] 關鍵字: ${keywords.length} 個`);
+
+      const entities = this.extractEntities(content);
+      logger.info(
+        `[PARSE_SECTIONS] 實體: ${Object.keys(entities).length} 類型`
+      );
+
+      const documentType = this.extractSection(content, "文件類型分類");
+      logger.info(`[PARSE_SECTIONS] 文件類型: ${documentType || "未分類"}`);
+
+      const confidenceScore = this.extractConfidenceScore(content);
+      logger.info(`[PARSE_SECTIONS] 信心分數: ${confidenceScore}`);
+
+      const result = {
         summary: summary || content.substring(0, config.summary.maxLength),
         keyPoints: keyPoints,
         keywords: keywords,
@@ -118,11 +163,17 @@ class SummaryService {
         documentType: documentType,
         confidenceScore: confidenceScore,
       };
+
+      logger.info(
+        `[PARSE_COMPLETE] 解析完成，最終摘要長度: ${result.summary.length} 字元`
+      );
+      return result;
     } catch (error) {
       logger.logError("處理摘要結果失敗", error);
+      logger.warn(`[PARSE_FALLBACK] 使用後備解析方案`);
 
       // 如果解析失敗，返回基本摘要
-      return {
+      const fallbackResult = {
         summary: summaryResult.content || summaryResult.text || "",
         keyPoints: [],
         keywords: [],
@@ -130,6 +181,11 @@ class SummaryService {
         documentType: "未分類",
         confidenceScore: 0.5,
       };
+
+      logger.info(
+        `[PARSE_FALLBACK] 後備解析完成，摘要長度: ${fallbackResult.summary.length} 字元`
+      );
+      return fallbackResult;
     }
   }
 
@@ -459,12 +515,21 @@ class LocalLLMClient {
     const startTime = Date.now();
 
     try {
+      logger.info(`[LLM_REQUEST] 開始呼叫 LLM 模型: ${this.model}`);
+      logger.info(`[LLM_REQUEST] 檔案: ${documentData.fileName}`);
+      logger.info(`[LLM_REQUEST] 文件內容長度: ${prompt.length} 字元`);
+
       // 為 Gemma 3 優化的提示詞格式
       const optimizedPrompt = `<bos><start_of_turn>user
 ${prompt}
 <end_of_turn>
 <start_of_turn>model
 `;
+
+      logger.info(`[LLM_REQUEST] 發送請求到: ${this.baseURL}/api/generate`);
+      logger.info(
+        `[LLM_REQUEST] 請求參數: temperature=0.7, top_p=0.9, top_k=40`
+      );
 
       const response = await axios.post(
         `${this.baseURL}/api/generate`,
@@ -486,6 +551,35 @@ ${prompt}
 
       const processingTime = Date.now() - startTime;
 
+      logger.info(`[LLM_RESPONSE] LLM 回應處理完成，耗時: ${processingTime}ms`);
+      logger.info(
+        `[LLM_RESPONSE] 提示詞 tokens: ${response.data.prompt_eval_count || 0}`
+      );
+      logger.info(
+        `[LLM_RESPONSE] 生成 tokens: ${response.data.eval_count || 0}`
+      );
+      logger.info(
+        `[LLM_RESPONSE] 總 tokens: ${
+          (response.data.prompt_eval_count || 0) +
+          (response.data.eval_count || 0)
+        }`
+      );
+      logger.info(
+        `[LLM_RESPONSE] 回應內容長度: ${
+          response.data.response?.length || 0
+        } 字元`
+      );
+
+      // 打印 LLM 回應的前 500 字元作為預覽
+      if (response.data.response) {
+        const preview = response.data.response.substring(0, 500);
+        logger.info(
+          `[LLM_RESPONSE] 回應內容預覽:\n${preview}${
+            response.data.response.length > 500 ? "..." : ""
+          }`
+        );
+      }
+
       return {
         content: response.data.response,
         processingTime: processingTime,
@@ -499,6 +593,7 @@ ${prompt}
       };
     } catch (error) {
       logger.logError("本地 LLM API 呼叫失敗", error);
+      logger.error(`[LLM_ERROR] 請求失敗，耗時: ${Date.now() - startTime}ms`);
       throw new Error(`本地 LLM API 錯誤: ${error.message}`);
     }
   }
