@@ -20,6 +20,7 @@
     "test:doc": "node scripts/test-doc-processing.js test",
     "test:textract": "node scripts/test-textract.js",
     "test:single": "node scripts/single-file-test.js",
+    "test:network": "node scripts/test-network-monitoring.js",
     "doc:create": "node scripts/test-doc-processing.js create",
     "word:guide": "node scripts/word-helper.js guide",
     "word:create": "node scripts/word-helper.js create"
@@ -34,6 +35,7 @@
   "author": "SFDA Team",
   "license": "MIT",
   "dependencies": {
+    "@marsaud/smb2": "^0.18.0",
     "axios": "^1.6.2",
     "chokidar": "^3.5.3",
     "crypto": "^1.0.1",

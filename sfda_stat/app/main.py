@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import descriptive, inferential, regression, correlation, distribution
+from app.api import descriptive, inferential, regression, correlation, distribution, charts
 
 app = FastAPI(
     title="SFDA 統計學分析 API",
@@ -30,6 +30,9 @@ app.include_router(
 )
 app.include_router(
     distribution.router, prefix="/api/v1/distribution", tags=["機率分佈"]
+)
+app.include_router(
+    charts.router, prefix="/api/v1/charts", tags=["圖表創建"]
 )
 
 

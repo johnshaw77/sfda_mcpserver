@@ -9,6 +9,7 @@ import { AnalyzeDataTool } from "./analyze-data.js";
 import { PerformChiSquareTool } from "./perform-chisquare.js";
 import { PerformANOVATool } from "./perform-anova.js";
 import { ParseCSVTTestTool } from "./parse-csv-ttest.js";
+import { CreateChartTool } from "./create-chart.js";
 
 // Stat 模組名稱
 export const MODULE_NAME = "stat";
@@ -35,6 +36,7 @@ export const statTools = [
   createTool(PerformChiSquareTool),
   createTool(PerformANOVATool),
   createTool(ParseCSVTTestTool),
+  createTool(CreateChartTool),
 ];
 
 // 註冊所有統計工具的函數 (與 HR/MIL 一致的方式)

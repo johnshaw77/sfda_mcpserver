@@ -1,7 +1,7 @@
 ---
-description: Comprehensive reference for Taskmaster MCP tools and CLI commands.
-globs: **/*
-alwaysApply: true
+description: 
+globs: 
+alwaysApply: false
 ---
 # Taskmaster Tool & Command Reference
 
@@ -404,4 +404,4 @@ Environment variables are used **only** for sensitive API keys related to AI pro
 
 ---
 
-For details on how these commands fit into the development process, see the [Development Workflow Guide](mdc:.cursor/rules/dev_workflow.mdc).
+For details on how these commands fit into the development process, see the [Development Workflow Guide](mdc:sfda_nexus/.cursor/rules/dev_workflow.mdc).

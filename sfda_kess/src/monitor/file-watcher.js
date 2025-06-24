@@ -4,6 +4,7 @@ const fs = require("fs-extra");
 const config = require("../../config");
 const logger = require("../utils/logger");
 const EventEmitter = require("events");
+const NetworkStorageMonitor = require("./network-storage-monitor");
 
 class FileWatcher extends EventEmitter {
   constructor() {
@@ -11,6 +12,13 @@ class FileWatcher extends EventEmitter {
     this.watchers = new Map(); // 儲存每個資料夾的監控器
     this.isActive = false;
     this.watchedFiles = new Set(); // 追蹤已監控的檔案
+
+    // 網路儲存監控器
+    this.networkMonitor = null;
+    if (config.monitoring.enableNetworkMonitoring) {
+      this.networkMonitor = new NetworkStorageMonitor();
+      this.setupNetworkMonitorEvents();
+    }
   }
 
   /**
@@ -27,15 +35,51 @@ class FileWatcher extends EventEmitter {
       logger.info("開始檔案監控...");
       this.isActive = true;
 
+      // 監控本地資料夾
       for (const folder of folders) {
         await this.watchFolder(folder);
       }
 
-      logger.info(`檔案監控啟動完成，監控 ${folders.length} 個資料夾`);
+      // 啟動網路儲存監控
+      if (this.networkMonitor && config.monitoring.networkPaths.length > 0) {
+        logger.info("啟動網路儲存監控...");
+        await this.networkMonitor.startMonitoring(
+          config.monitoring.networkPaths
+        );
+      }
+
+      const totalFolders =
+        folders.length + (config.monitoring.networkPaths.length || 0);
+      logger.info(
+        `檔案監控啟動完成，監控 ${folders.length} 個本地資料夾和 ${
+          config.monitoring.networkPaths.length || 0
+        } 個網路路徑`
+      );
     } catch (error) {
       logger.logError("檔案監控啟動失敗", error);
       throw error;
     }
+  }
+
+  /**
+   * 設定網路監控器事件
+   */
+  setupNetworkMonitorEvents() {
+    if (!this.networkMonitor) return;
+
+    this.networkMonitor.on("networkFile", (eventData) => {
+      // 將網路檔案事件轉發到主事件處理器
+      this.handleFileEvent(
+        eventData.eventType,
+        eventData.filePath,
+        eventData.fileInfo
+      );
+    });
+
+    this.networkMonitor.on("error", (error) => {
+      logger.logError("網路儲存監控錯誤", error);
+      this.emit("error", error);
+    });
   }
 
   /**
@@ -251,9 +295,16 @@ class FileWatcher extends EventEmitter {
     try {
       logger.info("停止檔案監控...");
 
+      // 停止本地資料夾監控
       for (const [folderPath, watcher] of this.watchers) {
         await watcher.close();
         logger.logProcessing("WATCH_STOP", `停止監控: ${folderPath}`);
+      }
+
+      // 停止網路儲存監控
+      if (this.networkMonitor) {
+        logger.info("停止網路儲存監控...");
+        await this.networkMonitor.stop();
       }
 
       this.watchers.clear();
@@ -272,12 +323,19 @@ class FileWatcher extends EventEmitter {
    * @returns {Object} 監控狀態資訊
    */
   getStatus() {
-    return {
+    const status = {
       isActive: this.isActive,
       watchedFolders: Array.from(this.watchers.keys()),
       watchedFilesCount: this.watchedFiles.size,
       watchersCount: this.watchers.size,
     };
+
+    // 添加網路儲存監控狀態
+    if (this.networkMonitor) {
+      status.networkStorage = this.networkMonitor.getStatus();
+    }
+
+    return status;
   }
 
   /**

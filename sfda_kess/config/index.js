@@ -36,6 +36,11 @@ const config = {
     watchFolders: process.env.WATCH_FOLDERS
       ? process.env.WATCH_FOLDERS.split(",")
       : ["./demo-data"],
+    // 網路儲存監控設定
+    networkPaths: process.env.NETWORK_PATHS
+      ? process.env.NETWORK_PATHS.split(",")
+      : [],
+    enableNetworkMonitoring: process.env.ENABLE_NETWORK_MONITORING === "true",
     pollingInterval: parseInt(process.env.POLLING_INTERVAL) || 5000,
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024, // 10MB
     supportedExtensions: process.env.SUPPORTED_EXTENSIONS
@@ -48,7 +53,19 @@ const config = {
       "**/Thumbs.db",
       "**/*.tmp",
       "**/*.temp",
+      "**/.Trash-*/**",
+      "**/System Volume Information/**",
+      "**/$RECYCLE.BIN/**",
     ],
+    // 網路儲存專用設定
+    networkStorage: {
+      retryAttempts: parseInt(process.env.NETWORK_RETRY_ATTEMPTS) || 3,
+      retryDelay: parseInt(process.env.NETWORK_RETRY_DELAY) || 5000,
+      connectionTimeout:
+        parseInt(process.env.NETWORK_CONNECTION_TIMEOUT) || 30000,
+      enableAutoMount: process.env.ENABLE_AUTO_MOUNT !== "false",
+      mountTimeout: parseInt(process.env.MOUNT_TIMEOUT) || 60000,
+    },
   },
 
   // 處理設定
