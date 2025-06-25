@@ -246,10 +246,13 @@ export class PerformANOVATool extends BaseTool {
     }
 
     // 效果量
-    if (result.effect_size) {
+    if (result.effect_size !== undefined && result.effect_size !== null) {
       report += "## 📏 效果量\n\n";
-      report += `- **η² (Eta squared)**: ${result.effect_size.eta_squared.toFixed(4)}\n`;
-      report += `- **效果大小**: ${this.interpretEtaSquared(result.effect_size.eta_squared)}\n\n`;
+      report += `- **η² (Eta squared)**: ${result.effect_size.toFixed(4)}\n`;
+      
+      // 使用後端提供的效果量解釋，若無則使用本地解釋
+      const interpretation = result.effect_size_interpretation || this.interpretEtaSquared(result.effect_size);
+      report += `- **效果大小**: ${interpretation}\n\n`;
     }
 
     // ANOVA 表

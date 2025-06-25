@@ -393,6 +393,107 @@ class StatService {
   }
 
   /**
+   * 執行 Mann-Whitney U 檢定
+   * @param {Object} data - 檢定數據
+   * @param {Array} data.sample1 - 樣本1數據
+   * @param {Array} data.sample2 - 樣本2數據
+   * @param {number} data.alpha - 顯著水準 (預設 0.05)
+   * @param {string} data.alternative - 對立假設 (預設 "two-sided")
+   * @param {Object} context - 分析上下文
+   * @returns {Object} 檢定結果和解釋
+   */
+  async performMannWhitneyTest(data, context = {}) {
+    try {
+      logger.info("開始執行 Mann-Whitney U 檢定", {
+        sample1Size: data.sample1?.length,
+        sample2Size: data.sample2?.length,
+        context: context.scenario,
+      });
+
+      const apiResult = await this.callStatAPI("/inferential/mann_whitney", {
+        sample1: data.sample1,
+        sample2: data.sample2,
+        alpha: data.alpha || 0.05,
+        alternative: data.alternative || "two-sided",
+      });
+
+      return {
+        ...apiResult,
+        context,
+      };
+    } catch (error) {
+      logger.error("Mann-Whitney U 檢定執行失敗", { error: error.message });
+      throw new Error(`Mann-Whitney U 檢定執行失敗: ${error.message}`);
+    }
+  }
+
+  /**
+   * 執行 Wilcoxon 符號等級檢定
+   * @param {Object} data - 檢定數據
+   * @param {Array} data.sample1 - 第一次測量數據
+   * @param {Array} data.sample2 - 第二次測量數據
+   * @param {number} data.alpha - 顯著水準 (預設 0.05)
+   * @param {string} data.alternative - 對立假設 (預設 "two-sided")
+   * @param {Object} context - 分析上下文
+   * @returns {Object} 檢定結果和解釋
+   */
+  async performWilcoxonTest(data, context = {}) {
+    try {
+      logger.info("開始執行 Wilcoxon 符號等級檢定", {
+        sample1Size: data.sample1?.length,
+        sample2Size: data.sample2?.length,
+        context: context.scenario,
+      });
+
+      const apiResult = await this.callStatAPI("/inferential/wilcoxon", {
+        sample1: data.sample1,
+        sample2: data.sample2,
+        alpha: data.alpha || 0.05,
+        alternative: data.alternative || "two-sided",
+      });
+
+      return {
+        ...apiResult,
+        context,
+      };
+    } catch (error) {
+      logger.error("Wilcoxon 符號等級檢定執行失敗", { error: error.message });
+      throw new Error(`Wilcoxon 符號等級檢定執行失敗: ${error.message}`);
+    }
+  }
+
+  /**
+   * 執行 Kruskal-Wallis 檢定
+   * @param {Object} data - 檢定數據
+   * @param {Array} data.groups - 各組數據
+   * @param {number} data.alpha - 顯著水準 (預設 0.05)
+   * @param {Object} context - 分析上下文
+   * @returns {Object} 檢定結果和解釋
+   */
+  async performKruskalWallisTest(data, context = {}) {
+    try {
+      logger.info("開始執行 Kruskal-Wallis 檢定", {
+        groupCount: data.groups?.length,
+        groupSizes: data.groups?.map(g => g.length),
+        context: context.scenario,
+      });
+
+      const apiResult = await this.callStatAPI("/inferential/kruskal_wallis", {
+        groups: data.groups,
+        alpha: data.alpha || 0.05,
+      });
+
+      return {
+        ...apiResult,
+        context,
+      };
+    } catch (error) {
+      logger.error("Kruskal-Wallis 檢定執行失敗", { error: error.message });
+      throw new Error(`Kruskal-Wallis 檢定執行失敗: ${error.message}`);
+    }
+  }
+
+  /**
    * 調用統計 API
    * @param {string} endpoint - API 端點
    * @param {Object} payload - 請求數據

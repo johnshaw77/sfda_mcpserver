@@ -255,8 +255,8 @@ export class PerformChiSquareTool extends BaseTool {
     // 效果量
     if (result.effect_size) {
       report += "## 📏 效果量\n\n";
-      report += `- **Cramér's V**: ${result.effect_size.cramers_v.toFixed(4)}\n`;
-      report += `- **效果大小**: ${this.interpretCramersV(result.effect_size.cramers_v)}\n\n`;
+      report += `- **Cramér's V**: ${result.effect_size.toFixed(4)}\n`;
+      report += `- **效果大小**: ${result.effect_size_interpretation || this.interpretCramersV(result.effect_size)}\n\n`;
     }
 
     // 頻數表

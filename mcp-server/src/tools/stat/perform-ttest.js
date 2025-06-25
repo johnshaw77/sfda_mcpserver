@@ -235,10 +235,13 @@ export class PerformTTestTool extends BaseTool {
     }
 
     // 效果量
-    if (result.effect_size) {
+    if (result.effect_size !== undefined && result.effect_size !== null) {
       report += `## 💪 效果量\n`;
       report += `**Cohen's d**: ${result.effect_size.toFixed(3)}\n`;
-      report += `**效果大小**: ${this.getEffectSizeInterpretation(result.effect_size)}\n\n`;
+      
+      // 使用後端提供的效果量解釋，若無則使用本地解釋
+      const interpretation = result.effect_size_interpretation || this.getEffectSizeInterpretation(result.effect_size);
+      report += `**效果大小**: ${interpretation}\n\n`;
     }
 
     // 解釋

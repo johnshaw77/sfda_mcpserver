@@ -487,6 +487,14 @@ export class ParseCSVTTestTool extends BaseTool {
       report += `- **95% 信賴區間**: [${result.confidence_interval[0].toFixed(4)}, ${result.confidence_interval[1].toFixed(4)}]\n`;
     }
     
+    // 效果量資訊
+    if (result.effect_size !== null && result.effect_size !== undefined) {
+      report += `- **效果量 (Cohen's d)**: ${result.effect_size.toFixed(4)}\n`;
+      if (result.effect_size_interpretation) {
+        report += `- **效果大小**: ${result.effect_size_interpretation}\n`;
+      }
+    }
+    
     report += `\n`;
 
     // 數據摘要
