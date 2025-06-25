@@ -6,6 +6,7 @@ const pdfParse = require("pdf-parse");
 const xlsx = require("xlsx");
 const logger = require("../utils/logger");
 const fileArchivingService = require("../services/file-archiving-service");
+const EnhancedPdfProcessor = require("./enhanced-pdf-processor");
 
 class DocumentProcessor {
   constructor() {
@@ -19,6 +20,9 @@ class DocumentProcessor {
       ".xls": this.processXlsxFile.bind(this),
       ".rtf": this.processRtfFile.bind(this), // 添加 RTF 支援
     };
+
+    // 初始化增強版 PDF 處理器
+    this.enhancedPdfProcessor = new EnhancedPdfProcessor();
   }
 
   /**
@@ -184,17 +188,52 @@ class DocumentProcessor {
   }
 
   /**
-   * 處理 PDF 檔案
+   * 處理 PDF 檔案 - 增強版
    * @param {string} filePath - 檔案路徑
    * @returns {string} 檔案內容
    */
   async processPdfFile(filePath) {
     try {
-      const fileBuffer = await fs.readFile(filePath);
-      const pdfData = await pdfParse(fileBuffer);
-      return pdfData.text;
+      logger.info(`使用增強版 PDF 處理器處理檔案: ${filePath}`);
+
+      // 使用增強版 PDF 處理器
+      const result = await this.enhancedPdfProcessor.processPdf(filePath);
+
+      // 記錄處理資訊
+      logger.info(`PDF 處理完成: ${filePath}`, {
+        pages: result.processing.pages,
+        ocrPerformed: result.processing.ocrPerformed,
+        contentLength: result.content.length,
+        wordCount: result.structure?.wordCount || 0,
+      });
+
+      return result.content;
     } catch (error) {
-      throw new Error(`讀取 PDF 檔案失敗: ${error.message}`);
+      logger.logError(`增強版 PDF 處理失敗，嘗試基本處理: ${filePath}`, error);
+
+      // 降級到基本處理
+      try {
+        const fileBuffer = await fs.readFile(filePath);
+        const pdfData = await pdfParse(fileBuffer);
+        logger.info(`PDF 基本處理成功: ${filePath}`);
+        return pdfData.text;
+      } catch (basicError) {
+        throw new Error(`PDF 處理完全失敗: ${basicError.message}`);
+      }
+    }
+  }
+
+  /**
+   * 處理 PDF 檔案並返回詳細資訊
+   * @param {string} filePath - 檔案路徑
+   * @returns {Object} 詳細處理結果
+   */
+  async processPdfFileDetailed(filePath) {
+    try {
+      return await this.enhancedPdfProcessor.processPdf(filePath);
+    } catch (error) {
+      logger.logError(`PDF 詳細處理失敗: ${filePath}`, error);
+      throw error;
     }
   }
 

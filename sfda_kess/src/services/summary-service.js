@@ -500,6 +500,7 @@ class LocalLLMClient {
 
   async initialize() {
     try {
+      console.log(`${this.baseURL}/api/tags`);
       // 測試連線
       await axios.get(`${this.baseURL}/api/tags`);
       logger.logProcessing(

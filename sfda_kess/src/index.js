@@ -5,12 +5,15 @@ const FileWatcher = require("./monitor/file-watcher");
 const DocumentProcessor = require("./processor/document-processor");
 const SummaryService = require("./services/summary-service");
 const DatabaseMigration = require("./database/migrations/migrate");
+const WindowsNetworkMonitor = require("./monitor/windows-network-monitor");
+const path = require("path");
 
 class KessApplication {
   constructor() {
     this.fileWatcher = null;
     this.documentProcessor = null;
     this.summaryService = null;
+    this.windowsNetworkMonitor = null;
     this.isRunning = false;
     this.processingQueue = [];
     this.isProcessing = false;
@@ -93,6 +96,15 @@ class KessApplication {
       // 初始化檔案監控器
       this.fileWatcher = new FileWatcher();
 
+      // 初始化 Windows 網路監控器 (僅在 Windows 環境下)
+      if (
+        process.platform === "win32" &&
+        config.monitoring.enableNetworkMonitoring
+      ) {
+        this.windowsNetworkMonitor = new WindowsNetworkMonitor();
+        logger.info("Windows 網路監控器已初始化");
+      }
+
       logger.logProcessing("SERVICE_INIT", "服務模組初始化完成");
     } catch (error) {
       logger.logError("服務初始化失敗", error);
@@ -148,7 +160,7 @@ class KessApplication {
       logger.info("啟動 KESS 系統...");
 
       // 檢查並掛載網路磁碟機
-      if (config.monitoring.networkMonitoring) {
+      if (config.monitoring.enableNetworkMonitoring) {
         await this.setupNetworkDrives();
       }
 
@@ -199,6 +211,34 @@ class KessApplication {
    */
   async handleFileEvent(eventData) {
     try {
+      // 處理來自 Windows 網路監控器的事件格式
+      if (eventData.originalUrl) {
+        // 來自網路監控器的事件，需要轉換格式
+        const fileName = path.basename(eventData.path);
+
+        // 跳過目錄事件
+        if (eventData.isDirectory) {
+          logger.info(
+            `[FILE_EVENT] 跳過目錄事件: ${eventData.type} - ${eventData.path}`
+          );
+          return;
+        }
+
+        // 轉換為統一格式
+        eventData = {
+          eventType: eventData.type,
+          filePath: eventData.path,
+          fileInfo: {
+            fileName: fileName,
+            size: eventData.size || 0,
+            modified: eventData.modified || new Date(),
+            isDirectory: eventData.isDirectory || false,
+            isFile: eventData.isFile || !eventData.isDirectory,
+          },
+          originalUrl: eventData.originalUrl,
+        };
+      }
+
       const { eventType, filePath, fileInfo } = eventData;
 
       logger.logProcessing("FILE_EVENT", `處理檔案事件: ${eventType}`, {
@@ -231,7 +271,10 @@ class KessApplication {
         this.startProcessingQueue();
       }
     } catch (error) {
-      logger.logError(`處理檔案事件失敗: ${eventData.filePath}`, error);
+      logger.logError(
+        `處理檔案事件失敗: ${eventData.filePath || eventData.path}`,
+        error
+      );
     }
   }
 
@@ -662,6 +705,98 @@ class KessApplication {
     };
 
     logger.logProcessing("SYSTEM_STATUS", "系統狀態", status);
+  }
+
+  /**
+   * 設定網路磁碟機
+   */
+  async setupNetworkDrives() {
+    try {
+      logger.info("設定網路磁碟機...");
+
+      // 檢查是否在 Windows 環境
+      if (process.platform !== "win32") {
+        logger.warn("非 Windows 環境，目前僅支援 Windows 原生 SMB 掛載");
+        logger.info(
+          "建議在 Linux/macOS 環境下使用系統內建的 CIFS/SMB 掛載功能"
+        );
+        return;
+      }
+
+      // 檢查是否有網路路徑配置
+      if (
+        !config.monitoring.networkPaths ||
+        config.monitoring.networkPaths.length === 0
+      ) {
+        logger.info("未配置網路路徑，跳過網路磁碟機設定");
+        return;
+      }
+
+      // 使用 Windows 網路監控器
+      if (this.windowsNetworkMonitor) {
+        // 設定事件監聽器
+        this.windowsNetworkMonitor.on("fileEvent", async (eventData) => {
+          await this.handleFileEvent(eventData);
+        });
+
+        this.windowsNetworkMonitor.on("error", (error) => {
+          logger.logError("Windows 網路監控器發生錯誤", error);
+        });
+
+        // 開始監控網路路徑
+        logger.info(
+          `準備監控 ${config.monitoring.networkPaths.length} 個網路路徑`
+        );
+        await this.windowsNetworkMonitor.startMonitoring(
+          config.monitoring.networkPaths
+        );
+        logger.info("Windows 網路磁碟機設定完成");
+      } else {
+        logger.warn("Windows 網路監控器未初始化");
+      }
+    } catch (error) {
+      logger.logError("設定網路磁碟機失敗", error);
+      // 不要拋出錯誤，讓系統繼續運行
+    }
+  }
+
+  /**
+   * 關閉應用程式
+   */
+  async shutdown() {
+    try {
+      logger.info("正在關閉 KESS 系統...");
+
+      this.isRunning = false;
+
+      // 停止檔案監控
+      if (this.fileWatcher) {
+        await this.fileWatcher.stopWatching();
+      }
+
+      // 停止網路監控器
+      if (this.windowsNetworkMonitor) {
+        await this.windowsNetworkMonitor.stopMonitoring();
+        logger.info("Windows 網路監控器已停止");
+      }
+
+      // 等待處理佇列完成
+      const maxWaitTime = 30000; // 30秒
+      const startTime = Date.now();
+      while (this.isProcessing && Date.now() - startTime < maxWaitTime) {
+        logger.info("等待處理佇列完成...");
+        await this.delay(1000);
+      }
+
+      // 關閉資料庫連線
+      if (dbConnection && dbConnection.connection) {
+        await dbConnection.close();
+      }
+
+      logger.info("KESS 系統已安全關閉");
+    } catch (error) {
+      logger.logError("關閉系統時發生錯誤", error);
+    }
   }
 
   /**
