@@ -143,6 +143,63 @@ class MILService {
       const totalRecords = countResult.recordset[0].total;
       const totalPages = Math.ceil(totalRecords / limit);
 
+      // 📊 添加統計摘要查詢（基於相同的篩選條件）
+      const statsQuery = `
+        SELECT 
+          COUNT(*) as totalCount,
+          AVG(CAST(DelayDay as FLOAT)) as avgDelayDays,
+          MIN(DelayDay) as minDelayDays,
+          MAX(DelayDay) as maxDelayDays,
+          SUM(CASE WHEN DelayDay > 10 THEN 1 ELSE 0 END) as highRiskCount,
+          SUM(CASE WHEN DelayDay > 0 THEN 1 ELSE 0 END) as delayedCount,
+          SUM(CASE WHEN DelayDay <= 0 THEN 1 ELSE 0 END) as onTimeOrEarlyCount,
+          COUNT(DISTINCT DRI_EmpName) as uniqueDRICount,
+          COUNT(DISTINCT DRI_Dept) as uniqueDeptCount
+        FROM v_mil_kd
+        ${whereClause}
+      `;
+
+      const statsRequest = databaseService.getPool(this.dbName).request();
+      this.setQueryParameters(statsRequest, filters, status);
+      const statsResult = await statsRequest.query(statsQuery);
+      const stats = statsResult.recordset[0];
+
+      // 🎯 生成智能摘要文字（根據數據動態生成）
+      const generateSummary = (stats, filters) => {
+        const summaryParts = [];
+
+        if (filters.delayDayMin !== undefined) {
+          summaryParts.push(
+            `延遲天數 ≥ ${filters.delayDayMin} 天的專案共 ${stats.totalCount} 筆`,
+          );
+        } else {
+          summaryParts.push(`查詢到 ${stats.totalCount} 筆專案`);
+        }
+
+        if (stats.totalCount > 0) {
+          summaryParts.push(
+            `平均延遲 ${Math.round(stats.avgDelayDays * 10) / 10} 天`,
+          );
+
+          if (stats.highRiskCount > 0) {
+            summaryParts.push(
+              `⚠️ 高風險專案 ${stats.highRiskCount} 筆（延遲>10天）`,
+            );
+          }
+
+          if (stats.delayedCount > 0) {
+            summaryParts.push(`延遲專案 ${stats.delayedCount} 筆`);
+          }
+
+          summaryParts.push(`涉及 ${stats.uniqueDRICount} 位負責人`);
+          summaryParts.push(`橫跨 ${stats.uniqueDeptCount} 個部門`);
+        }
+
+        return summaryParts.join("，") + "。";
+      };
+
+      const intelligentSummary = generateSummary(stats, filters);
+
       logger.info("MIL 列表查詢成功", {
         count: result.recordset.length,
         totalRecords: totalRecords,
@@ -150,6 +207,7 @@ class MILService {
         totalPages: totalPages,
         status: status,
         filters: JSON.stringify(filters),
+        stats: stats,
       });
 
       return {
@@ -162,7 +220,29 @@ class MILService {
         status: status,
         timestamp: new Date().toISOString(),
         filters: filters,
-        data: result.recordset, // 統一字段
+        data: result.recordset,
+
+        // 📊 新增：統計摘要資訊
+        statistics: {
+          summary: intelligentSummary,
+          details: {
+            totalCount: stats.totalCount,
+            avgDelayDays: Math.round(stats.avgDelayDays * 10) / 10,
+            delayRange: {
+              min: stats.minDelayDays,
+              max: stats.maxDelayDays,
+            },
+            riskAnalysis: {
+              highRisk: stats.highRiskCount, // 延遲 > 10 天
+              delayed: stats.delayedCount, // 延遲 > 0 天
+              onTimeOrEarly: stats.onTimeOrEarlyCount, // 延遲 <= 0 天
+            },
+            responsibility: {
+              uniqueDRICount: stats.uniqueDRICount,
+              uniqueDeptCount: stats.uniqueDeptCount,
+            },
+          },
+        },
       };
     } catch (error) {
       logger.error("MIL 列表查詢失敗", {
