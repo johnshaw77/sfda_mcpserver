@@ -10,6 +10,9 @@ import { PerformChiSquareTool } from "./perform-chisquare.js";
 import { PerformANOVATool } from "./perform-anova.js";
 import { ParseCSVTTestTool } from "./parse-csv-ttest.js";
 import { CreateChartTool } from "./create-chart.js";
+import { CreateHistogramTool } from "./create-histogram.js";
+import { CreateBoxplotTool } from "./create-boxplot.js";
+import { CreateScatterTool } from "./create-scatter.js";
 import { PerformMannWhitneyTool } from "./perform-mann-whitney.js";
 import { PerformWilcoxonTool } from "./perform-wilcoxon.js";
 import { PerformKruskalWallisTool } from "./perform-kruskal-wallis.js";
@@ -20,7 +23,7 @@ export const MODULE_NAME = "stat";
 // Stat 模組元數據
 export const moduleInfo = {
   name: "統計分析工具",
-  description: "提供各種統計假設檢定和數據分析功能，包括參數和非參數檢定",
+  description: "提供各種統計假設檢定、數據分析和視覺化功能，包括參數和非參數檢定、圖表創建",
   endpoint: "/api/stat",
   icon: "chart-bar",
 };
@@ -34,15 +37,23 @@ const createTool = Tool => {
 
 // 導出所有統計工具
 export const statTools = [
+  // 統計檢定工具
   createTool(PerformTTestTool),
-  createTool(AnalyzeDataTool),
   createTool(PerformChiSquareTool),
   createTool(PerformANOVATool),
-  createTool(ParseCSVTTestTool),
-  createTool(CreateChartTool),
   createTool(PerformMannWhitneyTool),
   createTool(PerformWilcoxonTool),
   createTool(PerformKruskalWallisTool),
+  
+  // 數據分析工具
+  createTool(AnalyzeDataTool),
+  createTool(ParseCSVTTestTool),
+  
+  // 圖表創建工具
+  createTool(CreateChartTool),
+  createTool(CreateHistogramTool),
+  createTool(CreateBoxplotTool),
+  createTool(CreateScatterTool),
 ];
 
 // 註冊所有統計工具的函數 (與 HR/MIL 一致的方式)
