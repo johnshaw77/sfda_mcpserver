@@ -76,6 +76,17 @@ export class CreateScatterTool extends BaseTool {
               },
             },
           },
+          generate_image: {
+            type: "boolean",
+            description: "是否生成 base64 圖片",
+            default: false,
+          },
+          image_format: {
+            type: "string",
+            description: "圖片格式 (png, jpg, svg)",
+            default: "png",
+            enum: ["png", "jpg", "svg"],
+          },
         },
         required: ["x", "y"],
       },
@@ -116,6 +127,11 @@ export class CreateScatterTool extends BaseTool {
           correlation_analysis: this.generateCorrelationAnalysis(args.x, args.y),
           regression_analysis: args.show_regression_line ? 
             this.generateRegressionAnalysis(args.x, args.y) : null,
+          image_data: args.generate_image && scatterResult.has_image ? {
+            base64: scatterResult.image_base64,
+            format: scatterResult.image_format,
+            size: scatterResult.image_base64?.length || 0
+          } : null,
         },
       };
     } catch (error) {
@@ -198,6 +214,10 @@ export class CreateScatterTool extends BaseTool {
         x_axis_label: args.x_axis_label || "X",
         y_axis_label: args.y_axis_label || "Y",
         show_regression_line: args.show_regression_line || false,
+        generate_image: args.generate_image || false,
+        image_format: args.image_format || "png",
+        figsize: [10, 6],
+        dpi: 100,
       };
 
       // 調用統計分析服務的散點圖 API
@@ -287,6 +307,15 @@ export class CreateScatterTool extends BaseTool {
     // 成功信息
     response += "## ✅ 創建狀態\n\n";
     response += `散點圖已成功創建！${scatterResult.reasoning}\n\n`;
+    
+    // 圖片資訊
+    if (args.generate_image && scatterResult.has_image) {
+      response += "## 🖼️ 圖片資訊\n\n";
+      response += `- **圖片格式**: ${scatterResult.image_format.toUpperCase()}\n`;
+      response += `- **Base64 編碼**: 已生成（${scatterResult.image_base64?.length || 0} 字符）\n`;
+      response += `- **圖片狀態**: 可直接在前端顯示或儲存為檔案\n\n`;
+    }
+    
     response += "💡 **散點圖說明**: 適合檢視兩變數間的關係模式、識別異常值和評估線性關係強度\n";
 
     return response;

@@ -62,6 +62,17 @@ export class CreateHistogramTool extends BaseTool {
               },
             },
           },
+          generate_image: {
+            type: "boolean",
+            description: "是否生成 base64 圖片",
+            default: false,
+          },
+          image_format: {
+            type: "string",
+            description: "圖片格式 (png, jpg, svg)",
+            default: "png",
+            enum: ["png", "jpg", "svg"],
+          },
         },
         required: ["values"],
       },
@@ -100,6 +111,11 @@ export class CreateHistogramTool extends BaseTool {
           tool_type: "histogram_creation",
           chart_type: "histogram",
           statistical_summary: this.generateStatisticalSummary(args.values),
+          image_data: args.generate_image && histogramResult.has_image ? {
+            base64: histogramResult.image_base64,
+            format: histogramResult.image_format,
+            size: histogramResult.image_base64?.length || 0
+          } : null,
         },
       };
     } catch (error) {
@@ -164,6 +180,10 @@ export class CreateHistogramTool extends BaseTool {
         title: args.title,
         x_axis_label: args.x_axis_label || "數值",
         y_axis_label: args.y_axis_label || "頻率",
+        generate_image: args.generate_image || false,
+        image_format: args.image_format || "png",
+        figsize: [10, 6],
+        dpi: 100,
       };
 
       // 調用統計分析服務的直方圖 API
@@ -243,6 +263,15 @@ export class CreateHistogramTool extends BaseTool {
     // 成功信息
     response += "## ✅ 創建狀態\n\n";
     response += `直方圖已成功創建！${histogramResult.reasoning}\n\n`;
+    
+    // 圖片資訊
+    if (args.generate_image && histogramResult.has_image) {
+      response += "## 🖼️ 圖片資訊\n\n";
+      response += `- **圖片格式**: ${histogramResult.image_format.toUpperCase()}\n`;
+      response += `- **Base64 編碼**: 已生成（${histogramResult.image_base64?.length || 0} 字符）\n`;
+      response += `- **圖片狀態**: 可直接在前端顯示或儲存為檔案\n\n`;
+    }
+    
     response += "💡 **直方圖說明**: 適合檢視數據分佈形狀、辨識偏態和異常值，是統計分析的重要視覺化工具\n";
 
     return response;

@@ -65,6 +65,17 @@ export class CreateBoxplotTool extends BaseTool {
               },
             },
           },
+          generate_image: {
+            type: "boolean",
+            description: "是否生成 base64 圖片",
+            default: false,
+          },
+          image_format: {
+            type: "string",
+            description: "圖片格式 (png, jpg, svg)",
+            default: "png",
+            enum: ["png", "jpg", "svg"],
+          },
         },
         required: ["groups"],
       },
@@ -104,6 +115,11 @@ export class CreateBoxplotTool extends BaseTool {
           chart_type: "boxplot",
           group_statistics: this.generateGroupStatistics(args.groups),
           comparison_analysis: this.generateComparisonAnalysis(args.groups),
+          image_data: args.generate_image && boxplotResult.has_image ? {
+            base64: boxplotResult.image_base64,
+            format: boxplotResult.image_format,
+            size: boxplotResult.image_base64?.length || 0
+          } : null,
         },
       };
     } catch (error) {
@@ -179,6 +195,10 @@ export class CreateBoxplotTool extends BaseTool {
         group_labels: args.group_labels || args.groups.map((_, i) => `組別 ${i + 1}`),
         title: args.title,
         y_axis_label: args.y_axis_label || "數值",
+        generate_image: args.generate_image || false,
+        image_format: args.image_format || "png",
+        figsize: [10, 6],
+        dpi: 100,
       };
 
       // 調用統計分析服務的盒鬚圖 API
@@ -269,6 +289,15 @@ export class CreateBoxplotTool extends BaseTool {
     // 成功信息
     response += "## ✅ 創建狀態\n\n";
     response += `盒鬚圖已成功創建！${boxplotResult.reasoning}\n\n`;
+    
+    // 圖片資訊
+    if (args.generate_image && boxplotResult.has_image) {
+      response += "## 🖼️ 圖片資訊\n\n";
+      response += `- **圖片格式**: ${boxplotResult.image_format.toUpperCase()}\n`;
+      response += `- **Base64 編碼**: 已生成（${boxplotResult.image_base64?.length || 0} 字符）\n`;
+      response += `- **圖片狀態**: 可直接在前端顯示或儲存為檔案\n\n`;
+    }
+    
     response += "💡 **盒鬚圖說明**: 適合比較多組數據的分佈、檢測異常值，是組間比較分析的最佳視覺化工具\n";
 
     return response;
