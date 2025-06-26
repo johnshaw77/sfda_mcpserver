@@ -1,0 +1,351 @@
+# 散點圖創建工具測試案例
+
+## 工具概述
+散點圖是用於顯示兩個連續變數之間關係的視覺化工具，能夠展現相關性強度、線性關係、異常值和數據模式，是探索性資料分析的重要方法。
+
+## 統計專業情境
+
+### 情境 1: 藥物劑量與療效相關性分析
+**研究背景**: 分析藥物劑量與治療效果的劑量-反應關係
+**研究目的**: 建立劑量-效果模型，確定最佳治療劑量
+**統計意義**: 線性回歸分析、相關係數檢定、劑量建模
+
+**測試數據**:
+```json
+{
+  "x": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75],
+  "y": [12, 18, 25, 31, 38, 44, 50, 55, 61, 66, 71, 75, 78, 81, 83],
+  "title": "藥物劑量與療效相關性分析",
+  "x_axis_label": "藥物劑量 (mg)",
+  "y_axis_label": "療效改善分數",
+  "show_regression_line": true,
+  "generate_image": true,
+  "context": {
+    "scenario": "medical",
+    "x_variable_name": "藥物劑量",
+    "y_variable_name": "療效分數",
+    "relationship_hypothesis": "positive_correlation",
+    "analysis_purpose": "劑量-反應關係建模"
+  }
+}
+```
+
+### 情境 2: 教育投入與學習成效關係研究
+**研究背景**: 探討學習時間投入與考試成績的關係
+**研究目的**: 評估學習效率，優化學習時間分配
+**統計意義**: 相關分析、預測模型建立、效果量計算
+
+**測試數據**:
+```json
+{
+  "x": [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90],
+  "y": [68, 72, 75, 78, 82, 85, 88, 90, 92, 94, 95, 96, 97, 98, 98],
+  "title": "學習時間與考試成績相關性",
+  "x_axis_label": "每週學習時間 (小時)",
+  "y_axis_label": "期末考試成績",
+  "show_regression_line": true,
+  "generate_image": true,
+  "context": {
+    "scenario": "education",
+    "x_variable_name": "學習時間",
+    "y_variable_name": "考試成績",
+    "relationship_hypothesis": "positive_correlation",
+    "analysis_purpose": "學習效率評估與最佳化"
+  }
+}
+```
+
+### 情境 3: 製程參數與產品品質關係分析
+**研究背景**: 分析製程溫度對產品強度的影響
+**研究目的**: 優化製程參數，提高產品品質
+**統計意義**: 製程最佳化、品質控制、回歸建模
+
+**測試數據**:
+```json
+{
+  "x": [180, 185, 190, 195, 200, 205, 210, 215, 220, 225, 230, 235, 240, 245, 250],
+  "y": [425, 445, 465, 485, 505, 525, 545, 565, 580, 590, 595, 585, 570, 550, 520],
+  "title": "製程溫度與產品強度關係",
+  "x_axis_label": "製程溫度 (°C)",
+  "y_axis_label": "產品強度 (MPa)",
+  "show_regression_line": true,
+  "generate_image": true,
+  "context": {
+    "scenario": "quality",
+    "x_variable_name": "製程溫度",
+    "y_variable_name": "產品強度",
+    "relationship_hypothesis": "非線性關係",
+    "analysis_purpose": "製程最佳化與品質控制"
+  }
+}
+```
+
+## 一般用戶情境
+
+### 情境 1: 廣告投入與銷售額關係
+**生活情境**: 公司想了解廣告預算與銷售業績的關係
+**數據**: 過去15個月的廣告支出與銷售額
+**目的**: 評估廣告效果，制定最佳廣告投入策略
+
+**測試數據**:
+```json
+{
+  "x": [50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400],
+  "y": [280, 320, 360, 400, 440, 480, 520, 560, 595, 625, 650, 670, 685, 695, 700],
+  "title": "廣告投入與銷售額關係分析",
+  "x_axis_label": "月廣告預算 (萬元)",
+  "y_axis_label": "月銷售額 (萬元)",
+  "show_regression_line": true,
+  "generate_image": true,
+  "context": {
+    "scenario": "general",
+    "x_variable_name": "廣告預算",
+    "y_variable_name": "銷售額",
+    "relationship_hypothesis": "positive_correlation",
+    "analysis_purpose": "廣告投資效益評估"
+  }
+}
+```
+
+### 情境 2: 房屋面積與價格關係
+**生活情境**: 房地產分析師想了解房屋面積與售價的關係
+**數據**: 某區域房屋面積與成交價格
+**目的**: 建立房價預測模型，評估房屋價值
+
+**測試數據**:
+```json
+{
+  "x": [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95],
+  "y": [800, 950, 1100, 1250, 1400, 1550, 1700, 1850, 2000, 2150, 2300, 2450, 2600, 2750, 2900],
+  "title": "房屋面積與售價關係",
+  "x_axis_label": "房屋面積 (坪)",
+  "y_axis_label": "售價 (萬元)",
+  "show_regression_line": true,
+  "generate_image": true,
+  "context": {
+    "scenario": "general",
+    "x_variable_name": "房屋面積",
+    "y_variable_name": "房屋售價",
+    "relationship_hypothesis": "positive_correlation",
+    "analysis_purpose": "房價評估與預測"
+  }
+}
+```
+
+### 情境 3: 員工年資與薪資關係
+**生活情境**: 人資部門分析員工年資與薪資的關係
+**數據**: 公司員工年資與薪資資料
+**目的**: 檢視薪資制度合理性，規劃薪資調整
+
+**測試數據**:
+```json
+{
+  "x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "y": [35000, 38000, 41000, 44000, 47000, 50000, 53000, 56000, 59000, 62000, 65000, 68000, 71000, 74000, 77000],
+  "title": "員工年資與薪資關係",
+  "x_axis_label": "工作年資 (年)",
+  "y_axis_label": "月薪 (元)",
+  "show_regression_line": true,
+  "generate_image": true,
+  "context": {
+    "scenario": "general",
+    "x_variable_name": "工作年資",
+    "y_variable_name": "員工薪資",
+    "relationship_hypothesis": "positive_correlation",
+    "analysis_purpose": "薪資制度合理性分析"
+  }
+}
+```
+
+## 特殊關係模式情境
+
+### 情境 4: 負相關關係 - 產品價格與銷量
+**研究背景**: 分析產品價格對銷量的影響
+**特點**: 典型的負相關關係
+
+**測試數據**:
+```json
+{
+  "x": [100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380],
+  "y": [950, 850, 780, 720, 670, 620, 580, 540, 500, 460, 420, 380, 340, 300, 260],
+  "title": "產品價格與銷量關係 (負相關)",
+  "x_axis_label": "產品價格 (元)",
+  "y_axis_label": "月銷量 (件)",
+  "show_regression_line": true,
+  "generate_image": true,
+  "context": {
+    "scenario": "general",
+    "x_variable_name": "產品價格",
+    "y_variable_name": "月銷量",
+    "relationship_hypothesis": "negative_correlation",
+    "analysis_purpose": "價格彈性分析"
+  }
+}
+```
+
+### 情境 5: 非線性關係 - 運動強度與心率
+**研究背景**: 分析運動強度與心率的非線性關係
+**特點**: 二次函數關係，存在飽和效應
+
+**測試數據**:
+```json
+{
+  "x": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140],
+  "y": [70, 85, 100, 115, 130, 145, 160, 170, 175, 178, 180, 181, 181, 180, 179],
+  "title": "運動強度與心率關係 (非線性)",
+  "x_axis_label": "運動強度 (%)",
+  "y_axis_label": "心率 (次/分)",
+  "show_regression_line": false,
+  "generate_image": true,
+  "context": {
+    "scenario": "general",
+    "x_variable_name": "運動強度",
+    "y_variable_name": "心率",
+    "relationship_hypothesis": "非線性關係",
+    "analysis_purpose": "運動生理學分析"
+  }
+}
+```
+
+### 情境 6: 無相關關係 - 身高與智商
+**研究背景**: 檢驗身高與智商是否存在關係
+**特點**: 無明顯相關性的隨機分佈
+
+**測試數據**:
+```json
+{
+  "x": [150, 155, 160, 165, 170, 175, 180, 185, 155, 162, 168, 173, 178, 167, 172],
+  "y": [105, 118, 95, 125, 110, 88, 132, 102, 115, 98, 128, 108, 92, 120, 135],
+  "title": "身高與智商關係 (無相關)",
+  "x_axis_label": "身高 (cm)",
+  "y_axis_label": "智商",
+  "show_regression_line": true,
+  "generate_image": true,
+  "context": {
+    "scenario": "general",
+    "x_variable_name": "身高",
+    "y_variable_name": "智商",
+    "relationship_hypothesis": "no_correlation",
+    "analysis_purpose": "相關性檢驗"
+  }
+}
+```
+
+## 異常值與特殊模式
+
+### 情境 7: 含異常值的數據分析
+**研究背景**: 分析含有異常值的銷售數據
+**特點**: 包含明顯偏離主要趨勢的異常點
+
+**測試數據**:
+```json
+{
+  "x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "y": [10, 18, 25, 32, 38, 45, 52, 58, 95, 72, 78, 85, 92, 98, 105],
+  "title": "銷售數據分析 (含異常值)",
+  "x_axis_label": "月份",
+  "y_axis_label": "銷售額 (萬元)",
+  "show_regression_line": true,
+  "generate_image": true,
+  "context": {
+    "scenario": "general",
+    "x_variable_name": "時間月份",
+    "y_variable_name": "月銷售額",
+    "relationship_hypothesis": "positive_correlation",
+    "analysis_purpose": "異常值檢測與趨勢分析",
+    "special_note": "包含異常促銷月份"
+  }
+}
+```
+
+### 情境 8: 分群模式識別
+**研究背景**: 客戶年齡與消費金額分析，存在不同客群
+**特點**: 數據呈現明顯的分群模式
+
+**測試數據**:
+```json
+{
+  "x": [25, 28, 32, 35, 38, 45, 48, 52, 55, 58, 65, 68, 72, 75, 78],
+  "y": [1200, 1400, 1600, 1800, 2000, 3200, 3400, 3600, 3800, 4000, 800, 900, 1000, 1100, 1200],
+  "title": "客戶年齡與消費金額關係 (分群模式)",
+  "x_axis_label": "客戶年齡",
+  "y_axis_label": "月消費金額 (元)",
+  "show_regression_line": false,
+  "generate_image": true,
+  "context": {
+    "scenario": "general",
+    "x_variable_name": "客戶年齡",
+    "y_variable_name": "消費金額",
+    "relationship_hypothesis": "分群模式",
+    "analysis_purpose": "客群分析與市場區隔",
+    "special_note": "存在年輕高消費群與退休低消費群"
+  }
+}
+```
+
+## 預期結果
+
+### 統計專業用戶期望看到：
+- 詳細的相關係數（Pearson r）
+- 迴歸方程式與參數
+- R² 決定係數
+- 迴歸顯著性檢定
+- 殘差分析建議
+- 異常值識別與影響評估
+- 假設檢定條件檢查
+- 預測區間與信賴區間
+
+### 一般用戶期望看到：
+- 相關性強度的描述（強/中等/弱）
+- 關係方向說明（正相關/負相關/無關）
+- 視覺化趨勢線
+- 異常值的標示與解釋
+- 預測能力評估
+- 實用的洞察與建議
+- 決策支援建議
+
+## 測試指令範例
+
+```bash
+# 基本散點圖
+curl -X POST http://localhost:3000/tools/stat/create-scatter \
+  -H "Content-Type: application/json" \
+  -d '{
+    "x": [5,10,15,20,25],
+    "y": [12,18,25,31,38],
+    "title": "劑量效果關係"
+  }'
+
+# 含迴歸線的散點圖
+curl -X POST http://localhost:3000/tools/stat/create-scatter \
+  -H "Content-Type: application/json" \
+  -d '{
+    "x": [50,75,100,125,150],
+    "y": [280,320,360,400,440],
+    "title": "廣告與銷售關係",
+    "show_regression_line": true,
+    "generate_image": true
+  }'
+```
+
+## 分析重點
+
+### 相關性強度判斷：
+- **|r| > 0.8**: 強相關
+- **0.5 < |r| ≤ 0.8**: 中等相關
+- **0.3 < |r| ≤ 0.5**: 弱相關
+- **|r| ≤ 0.3**: 極弱或無相關
+
+### 視覺化模式識別：
+- **線性關係**: 點呈直線分佈
+- **非線性關係**: 點呈曲線分佈
+- **無關係**: 點隨機散佈
+- **異常值**: 明顯偏離主要模式的點
+- **分群**: 點形成明顯的群組
+
+### 實務應用建議：
+- 探索性資料分析的首選工具
+- 建立預測模型前的關係檢視
+- 異常值檢測與資料清理
+- 業務關係驗證與假設檢定
+- 決策支援的視覺化依據
