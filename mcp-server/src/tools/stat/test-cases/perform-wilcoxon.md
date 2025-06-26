@@ -264,3 +264,71 @@ curl -X POST http://localhost:3000/tools/stat/perform-wilcoxon \
 - **Wilcoxon**: 不需要常態性假設，較穩健
 - **配對 t 檢定**: 需要差值常態分佈，檢定力較高（當假設成立時）
 - **建議**: 當資料不符合常態性或樣本較小時使用 Wilcoxon
+
+## AI 提問範例
+
+### 範例 1: 醫療治療效果評估
+**用戶提問**: "我是醫生，想評估一種新的物理治療對病患疼痛的改善效果。我有 10 位病患治療前後的疼痛評分（0-10 分）：治療前 [8, 7, 9, 6, 8, 7, 9, 8, 6, 7]，治療後 [5, 4, 6, 3, 5, 4, 6, 5, 3, 4]。如何分析治療是否有效？"
+
+**AI 回應**: 這是典型的配對前後測設計，適合使用 Wilcoxon 符號秩檢定。由於疼痛評分是序位資料且樣本數較小，Wilcoxon 檢定比配對 t 檢定更適合。我來分析治療前後的差異是否具有統計顯著性。
+
+**工具調用**:
+```json
+{
+  "tool": "perform_wilcoxon",
+  "data": {
+    "sample1": [8, 7, 9, 6, 8, 7, 9, 8, 6, 7],
+    "sample2": [5, 4, 6, 3, 5, 4, 6, 5, 3, 4],
+    "alpha": 0.05,
+    "alternative": "greater"
+  },
+  "context": {
+    "scenario": "medical",
+    "variable_name": "疼痛評分 (0-10)",
+    "description": "評估物理治療對慢性疼痛的改善效果",
+    "variable_names": {
+      "sample1_name": "治療前",
+      "sample2_name": "治療後"
+    }
+  },
+  "visualizations": {
+    "include_charts": true,
+    "chart_types": ["difference_histogram", "paired_scatter", "boxplot"],
+    "generate_image": true,
+    "image_format": "png"
+  }
+}
+```
+
+### 範例 2: 個人健身效果追蹤
+**用戶提問**: "我參加了一個為期 8 週的健身計畫，想知道我的體重是否有顯著變化。我每週測量體重：計畫前 [72.5, 73.1, 72.8, 73.2, 72.9, 73.0, 72.7, 73.3]，計畫後 [70.2, 70.8, 70.5, 71.1, 70.7, 70.9, 70.3, 71.0]。這個改變有統計意義嗎？"
+
+**AI 回應**: 您想分析健身計畫前後的體重變化，這是配對數據分析。由於數據量較小且您想確認減重效果，我推薦使用 Wilcoxon 符號秩檢定，它對於小樣本和非常態分佈的數據很穩健。
+
+**工具調用**:
+```json
+{
+  "tool": "perform_wilcoxon",
+  "data": {
+    "sample1": [72.5, 73.1, 72.8, 73.2, 72.9, 73.0, 72.7, 73.3],
+    "sample2": [70.2, 70.8, 70.5, 71.1, 70.7, 70.9, 70.3, 71.0],
+    "alpha": 0.05,
+    "alternative": "greater"
+  },
+  "context": {
+    "scenario": "general",
+    "variable_name": "體重 (公斤)",
+    "description": "評估 8 週健身計畫的減重效果",
+    "variable_names": {
+      "sample1_name": "計畫前體重",
+      "sample2_name": "計畫後體重"
+    }
+  },
+  "visualizations": {
+    "include_charts": true,
+    "chart_types": ["difference_histogram", "paired_scatter"],
+    "generate_image": true,
+    "image_format": "png"
+  }
+}
+```

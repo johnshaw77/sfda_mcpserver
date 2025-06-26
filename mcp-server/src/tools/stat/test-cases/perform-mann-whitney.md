@@ -234,3 +234,61 @@ curl -X POST http://localhost:3000/tools/stat/perform-mann-whitney \
 - 資料至少為序位尺度
 - 兩組的資料分佈形狀相似（用於比較中位數）
 - 隨機抽樣
+
+## AI 提問範例
+
+### 範例 1: 醫療研究情境
+**用戶提問**: "我有兩組病患的治療效果數據，想比較新藥和安慰劑的效果。新藥組疼痛緩解時間是 [12, 15, 18, 22, 25, 28, 32, 35, 45, 58]，安慰劑組是 [25, 30, 35, 42, 48, 55, 62, 68, 75, 82]。數據分佈不太正常，應該用什麼統計方法？"
+
+**AI 回應**: 根據您的描述，這是典型的兩組獨立樣本比較，且數據分佈不符合常態性假設。建議使用 Mann-Whitney U 檢定（非參數檢定）。我來為您分析這個數據。
+
+**工具調用**:
+```json
+{
+  "tool": "perform_mann_whitney",
+  "data": {
+    "group1": [25, 30, 35, 42, 48, 55, 62, 68, 75, 82],
+    "group2": [12, 15, 18, 22, 25, 28, 32, 35, 45, 58],
+    "alpha": 0.05,
+    "alternative": "two-sided"
+  },
+  "context": {
+    "scenario": "medical",
+    "variable_name": "疼痛緩解時間 (分鐘)",
+    "group1_name": "安慰劑組",
+    "group2_name": "新藥組",
+    "description": "比較新藥與安慰劑對疼痛緩解時間的效果"
+  }
+}
+```
+
+### 範例 2: 教育評估情境
+**用戶提問**: "我是老師，想比較兩個班級的期末考成績。A班成績: [78, 82, 75, 88, 79, 85, 81, 77, 84, 80]，B班成績: [85, 89, 91, 87, 93, 88, 90, 86, 92, 89]。怎麼知道哪個班表現更好？"
+
+**AI 回應**: 您想比較兩個班級的成績差異。由於考試成績可能不完全符合常態分佈，而且您關心的是整體表現差異，Mann-Whitney U 檢定是很好的選擇。這個檢定可以告訴您兩班成績是否有統計上的顯著差異。
+
+**工具調用**:
+```json
+{
+  "tool": "perform_mann_whitney",
+  "data": {
+    "group1": [78, 82, 75, 88, 79, 85, 81, 77, 84, 80],
+    "group2": [85, 89, 91, 87, 93, 88, 90, 86, 92, 89],
+    "alpha": 0.05,
+    "alternative": "two-sided"
+  },
+  "context": {
+    "scenario": "education",
+    "variable_name": "期末考成績",
+    "group1_name": "A班",
+    "group2_name": "B班",
+    "description": "比較兩個班級的期末考試表現"
+  },
+  "visualizations": {
+    "include_charts": true,
+    "chart_types": ["boxplot", "histogram"],
+    "generate_image": true,
+    "image_format": "png"
+  }
+}
+```

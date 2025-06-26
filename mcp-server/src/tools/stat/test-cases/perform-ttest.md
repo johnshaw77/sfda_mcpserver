@@ -167,3 +167,71 @@ curl -X POST http://localhost:3000/tools/stat/perform-ttest \
   -H "Content-Type: application/json" \
   -d '{"group1": [98.5, 101.2, 99.8], "mu": 100}'
 ```
+
+## AI 提問範例
+
+### 範例 1: 醫療研究配對設計
+**用戶提問**: "我是醫生，研究一種新的降血壓藥物。我有 10 位病患服藥前後的血壓數據：服藥前 [140, 138, 145, 142, 139, 144, 141, 143, 137, 146]，服藥後 [128, 125, 132, 129, 126, 131, 127, 130, 124, 133]。如何分析這個藥物是否有效？"
+
+**AI 回應**: 這是典型的配對前後測設計，適合使用配對樣本 t 檢定。由於是同一批病患在不同時間點的測量，我們需要考慮個體間的差異。讓我來分析藥物治療前後的血壓變化。
+
+**工具調用**:
+```json
+{
+  "tool": "perform_ttest",
+  "data": {
+    "sample1": [140, 138, 145, 142, 139, 144, 141, 143, 137, 146],
+    "sample2": [128, 125, 132, 129, 126, 131, 127, 130, 124, 133],
+    "test_type": "paired",
+    "alpha": 0.05,
+    "alternative": "two-sided"
+  },
+  "context": {
+    "scenario": "medical",
+    "description": "評估降血壓藥物的治療效果",
+    "variable_names": {
+      "sample1_name": "治療前血壓",
+      "sample2_name": "治療後血壓"
+    }
+  },
+  "visualizations": {
+    "include_charts": true,
+    "chart_types": ["histogram", "boxplot", "qq_plot"],
+    "generate_image": true,
+    "image_format": "png"
+  }
+}
+```
+
+### 範例 2: 教育評估獨立樣本
+**用戶提問**: "我想比較兩種教學方法的效果。實驗組（新方法）的測驗成績: [85, 92, 78, 88, 91, 83, 87, 89, 84, 90]，對照組（傳統方法）的成績: [75, 82, 70, 78, 80, 73, 77, 81, 74, 79]。新方法是否真的比較好？"
+
+**AI 回應**: 您想比較兩個獨立群組的教學效果，這適合使用獨立樣本 t 檢定。由於是不同的學生群組，我們需要檢驗兩組平均成績是否有顯著差異。
+
+**工具調用**:
+```json
+{
+  "tool": "perform_ttest",
+  "data": {
+    "sample1": [75, 82, 70, 78, 80, 73, 77, 81, 74, 79],
+    "sample2": [85, 92, 78, 88, 91, 83, 87, 89, 84, 90],
+    "test_type": "independent",
+    "alpha": 0.05,
+    "alternative": "two-sided"
+  },
+  "context": {
+    "scenario": "education",
+    "description": "比較兩種教學方法的效果差異",
+    "variable_names": {
+      "sample1_name": "傳統教學法",
+      "sample2_name": "新教學方法"
+    }
+  },
+  "visualizations": {
+    "include_charts": true,
+    "chart_types": ["histogram", "boxplot"],
+    "generate_image": true,
+    "image_format": "png"
+  }
+}
+```
