@@ -181,7 +181,16 @@ export class AnalyzeDataTool extends BaseTool {
           report += this.generateChiSquareGuidance(suggestion, dataStructure);
         } else if (suggestion.test === "anova") {
           report += this.generateANOVAGuidance(suggestion, dataStructure);
+        } else if (suggestion.test === "mann_whitney") {
+          report += this.generateMannWhitneyGuidance(suggestion, dataStructure);
+        } else if (suggestion.test === "wilcoxon") {
+          report += this.generateWilcoxonGuidance(suggestion, dataStructure);
+        } else if (suggestion.test === "kruskal_wallis") {
+          report += this.generateKruskalWallisGuidance(suggestion, dataStructure);
         }
+
+        // 添加視覺化建議
+        report += this.generateVisualizationSuggestions(suggestion.test);
 
         report += "\n";
       });
@@ -191,7 +200,11 @@ export class AnalyzeDataTool extends BaseTool {
         const best = suggestions.recommendation;
         report += "## 🌟 最佳建議\n\n";
         report += `基於數據特徵，**${this.getTestDisplayName(best.test)}** 是最適合的分析方法。\n\n`;
-        report += `**下一步**: 請使用 \`perform_${best.test}\` 工具進行具體分析。\n\n`;
+        
+        // 提供具體的執行建議
+        report += this.generateExecutionPlan(best, dataStructure);
+        
+        report += `\n**下一步**: 請使用 \`perform_${best.test}\` 工具進行具體分析。\n\n`;
       }
     } else {
       report +=
@@ -199,11 +212,13 @@ export class AnalyzeDataTool extends BaseTool {
     }
 
     // 數據品質檢查
-    report += "## ✅ 數據品質建議\n\n";
+    report += "## ✅ 數據品質與統計假設建議\n\n";
 
-    const qualityChecks = this.performQualityChecks(dataStructure);
+    // 使用增強的品質檢查，如果有最佳建議則傳入檢定類型
+    const bestTest = suggestions.recommendation?.test;
+    const qualityChecks = this.performEnhancedQualityChecks(dataStructure, bestTest);
     qualityChecks.forEach(check => {
-      report += `- ${check}\n`;
+      report += `${check}\n\n`;
     });
 
     return report;
@@ -288,9 +303,12 @@ export class AnalyzeDataTool extends BaseTool {
    */
   getTestDisplayName(testName) {
     const names = {
-      ttest: "T檢定",
-      chisquare: "卡方檢定",
-      anova: "ANOVA 變異數分析",
+      ttest: "T檢定 (參數檢定)",
+      chisquare: "卡方檢定 (分類數據)",
+      anova: "ANOVA 變異數分析 (參數檢定)",
+      mann_whitney: "Mann-Whitney U 檢定 (非參數檢定)",
+      wilcoxon: "Wilcoxon 符號等級檢定 (非參數配對檢定)",
+      kruskal_wallis: "Kruskal-Wallis 檢定 (非參數多組檢定)",
     };
     return names[testName] || testName;
   }
@@ -353,5 +371,315 @@ export class AnalyzeDataTool extends BaseTool {
     }
 
     return checks;
+  }
+
+  /**
+   * 生成 Mann-Whitney U 檢定使用指導
+   * @param {Object} suggestion - 檢定建議
+   * @param {Object} dataStructure - 數據結構
+   * @returns {string} 使用指導
+   */
+  generateMannWhitneyGuidance(suggestion, dataStructure) {
+    const numericCol = dataStructure.columns.find(col => col.type === "numeric");
+    const categoricalCol = dataStructure.columns.find(
+      col => col.type === "categorical" && col.uniqueCount === 2
+    );
+
+    let guidance = "**使用指導**:\n";
+    guidance += `- 將 "${numericCol?.name}" 作為測量變數\n`;
+    guidance += `- 將 "${categoricalCol?.name}" 作為分組變數 (兩組比較)\n`;
+    guidance += `- 適用於數據不符合常態分佈或樣本大小不足的情況\n`;
+    guidance += `- 比較兩組的分佈位置是否相同\n`;
+
+    return guidance;
+  }
+
+  /**
+   * 生成 Wilcoxon 符號等級檢定使用指導
+   * @param {Object} suggestion - 檢定建議
+   * @param {Object} dataStructure - 數據結構
+   * @returns {string} 使用指導
+   */
+  generateWilcoxonGuidance(suggestion, dataStructure) {
+    const numericCols = dataStructure.columns
+      .filter(col => col.type === "numeric")
+      .slice(0, 2);
+
+    let guidance = "**使用指導**:\n";
+    guidance += `- 比較 "${numericCols[0]?.name}" 和 "${numericCols[1]?.name}" 的配對差異\n`;
+    guidance += `- 適用於配對樣本且數據不符合常態分佈的情況\n`;
+    guidance += `- 檢驗配對差異的中位數是否為零\n`;
+    guidance += `- 常用於前後測設計或配對實驗\n`;
+
+    return guidance;
+  }
+
+  /**
+   * 生成 Kruskal-Wallis 檢定使用指導
+   * @param {Object} suggestion - 檢定建議
+   * @param {Object} dataStructure - 數據結構
+   * @returns {string} 使用指導
+   */
+  generateKruskalWallisGuidance(suggestion, dataStructure) {
+    const numericCol = dataStructure.columns.find(col => col.type === "numeric");
+    const groupCol = dataStructure.columns.find(
+      col => col.type === "categorical" && col.uniqueCount > 2
+    );
+
+    let guidance = "**使用指導**:\n";
+    guidance += `- 將 "${numericCol?.name}" 作為測量變數\n`;
+    guidance += `- 將 "${groupCol?.name}" 作為因子變數 (${groupCol?.uniqueCount} 組)\n`;
+    guidance += `- 適用於多組比較且數據不符合 ANOVA 假設的情況\n`;
+    guidance += `- 非參數版本的單因子 ANOVA\n`;
+
+    return guidance;
+  }
+
+  /**
+   * 生成視覺化建議
+   * @param {string} testName - 檢定名稱
+   * @returns {string} 視覺化建議
+   */
+  generateVisualizationSuggestions(testName) {
+    let suggestions = "\n**📊 建議視覺化**:\n";
+
+    const visualizationMap = {
+      ttest: [
+        "直方圖 (histogram) - 檢查數據分佈",
+        "盒鬚圖 (boxplot) - 比較兩組數據",
+        "Q-Q圖 (qq_plot) - 檢驗常態性"
+      ],
+      anova: [
+        "盒鬚圖 (boxplot) - 多組數據比較",
+        "直方圖 (histogram) - 檢查整體分佈",
+        "殘差圖 (residual_plot) - 檢驗 ANOVA 假設"
+      ],
+      mann_whitney: [
+        "盒鬚圖 (boxplot) - 組間分佈比較",
+        "直方圖 (histogram) - 整體分佈檢查",
+        "等級圖 (rank_plot) - 等級分佈顯示"
+      ],
+      wilcoxon: [
+        "差異直方圖 (difference_histogram) - 配對差異分佈",
+        "配對散點圖 (paired_scatter) - 前後測關係",
+        "盒鬚圖 (boxplot) - 前後測比較"
+      ],
+      kruskal_wallis: [
+        "盒鬚圖 (boxplot) - 多組分佈比較",
+        "直方圖 (histogram) - 整體分佈檢查",
+        "等級圖 (rank_plot) - 等級分佈顯示"
+      ],
+      chisquare: [
+        "長條圖 (bar_chart) - 觀察vs期望頻率",
+        "殘差圖 (residual_plot) - 標準化殘差",
+        "馬賽克圖 (mosaic_plot) - 列聯表結構"
+      ]
+    };
+
+    const charts = visualizationMap[testName] || [];
+    charts.forEach(chart => {
+      suggestions += `- ${chart}\n`;
+    });
+
+    suggestions += `\n💡 **使用方式**: 在檢定參數中加入 \`visualizations\` 設定:\n`;
+    suggestions += `\`\`\`json\n`;
+    suggestions += `"visualizations": {\n`;
+    suggestions += `  "include_charts": true,\n`;
+    suggestions += `  "chart_types": ["${charts[0]?.split(' ')[0] || 'histogram'}"],\n`;
+    suggestions += `  "generate_image": true,\n`;
+    suggestions += `  "image_format": "png"\n`;
+    suggestions += `}\n`;
+    suggestions += `\`\`\`\n`;
+
+    return suggestions;
+  }
+
+  /**
+   * 增強的數據品質和統計假設檢查
+   * @param {Object} dataStructure - 數據結構
+   * @param {string} testType - 建議的檢定類型
+   * @returns {Array} 詳細的檢查建議
+   */
+  performEnhancedQualityChecks(dataStructure, testType = null) {
+    const checks = [];
+
+    // 基本數據品質檢查
+    if (dataStructure.rowCount < 10) {
+      checks.push("🚨 樣本大小極小 (< 10)，統計結果可能不可靠");
+    } else if (dataStructure.rowCount < 30) {
+      checks.push("⚠️ 樣本大小較小 (< 30)，建議考慮非參數檢定");
+    } else {
+      checks.push("✅ 樣本大小適中，適合統計分析");
+    }
+
+    // 針對特定檢定的建議
+    if (testType) {
+      const parametricTests = ['ttest', 'anova'];
+      const nonParametricTests = ['mann_whitney', 'wilcoxon', 'kruskal_wallis'];
+
+      if (parametricTests.includes(testType)) {
+        checks.push("📋 **參數檢定假設檢查**:");
+        checks.push("  - 確認數據近似常態分佈 (可用 Shapiro-Wilk 檢定)");
+        checks.push("  - 檢查變異數齊性 (可用 Levene 檢定)");
+        checks.push("  - 確保觀察值獨立");
+        checks.push("💡 若假設不滿足，建議改用對應的非參數檢定");
+      }
+
+      if (nonParametricTests.includes(testType)) {
+        checks.push("📋 **非參數檢定優勢**:");
+        checks.push("  - 不需要常態分佈假設");
+        checks.push("  - 對異常值較不敏感");
+        checks.push("  - 適用於序位數據");
+      }
+    }
+
+    // 數據類型特定檢查
+    const numericColumns = dataStructure.columns.filter(col => col.type === "numeric");
+    const categoricalColumns = dataStructure.columns.filter(col => col.type === "categorical");
+
+    if (numericColumns.length === 0) {
+      checks.push("⚠️ 沒有數值變數，只能進行分類數據分析");
+    }
+
+    if (categoricalColumns.length === 0) {
+      checks.push("💡 沒有分類變數，主要適用於描述性統計或相關分析");
+    }
+
+    // 分組變數檢查
+    categoricalColumns.forEach(col => {
+      if (col.uniqueCount === 2) {
+        checks.push(`✅ "${col.name}" 適合雙組比較 (T檢定或Mann-Whitney U)`);
+      } else if (col.uniqueCount > 2 && col.uniqueCount <= 10) {
+        checks.push(`✅ "${col.name}" 適合多組比較 (ANOVA或Kruskal-Wallis)`);
+      } else if (col.uniqueCount > 10) {
+        checks.push(`⚠️ "${col.name}" 類別過多 (${col.uniqueCount})，不適合作為分組變數`);
+      }
+    });
+
+    return checks;
+  }
+
+  /**
+   * 生成詳細的執行計劃
+   * @param {Object} recommendation - 最佳建議
+   * @param {Object} dataStructure - 數據結構
+   * @returns {string} 執行計劃
+   */
+  generateExecutionPlan(recommendation, dataStructure) {
+    let plan = "**📋 詳細執行計劃**:\n\n";
+    
+    // 步驟1: 數據準備
+    plan += "1. **數據準備階段**:\n";
+    plan += "   - 檢查缺失值並決定處理方式\n";
+    plan += "   - 檢查異常值並評估是否需要處理\n";
+    plan += "   - 確保數據格式正確\n\n";
+
+    // 步驟2: 假設檢驗 (針對參數檢定)
+    const parametricTests = ['ttest', 'anova'];
+    if (parametricTests.includes(recommendation.test)) {
+      plan += "2. **統計假設檢驗**:\n";
+      plan += "   - 常態性檢定 (Shapiro-Wilk 或 Kolmogorov-Smirnov)\n";
+      plan += "   - 變異數齊性檢定 (Levene's test)\n";
+      plan += "   - 若假設違反，考慮轉換數據或改用非參數檢定\n\n";
+    } else {
+      plan += "2. **非參數檢定優勢**:\n";
+      plan += "   - 無需常態分佈假設\n";
+      plan += "   - 對異常值較不敏感\n";
+      plan += "   - 適用於序位數據\n\n";
+    }
+
+    // 步驟3: 執行檢定
+    plan += "3. **執行統計檢定**:\n";
+    plan += `   - 使用 \`perform_${recommendation.test}\` 工具\n`;
+    plan += "   - 設定適當的顯著水準 (通常為 0.05)\n";
+    plan += "   - 加入視覺化參數以獲得圖表\n\n";
+
+    // 步驟4: 結果解釋
+    plan += "4. **結果解釋與報告**:\n";
+    plan += "   - 檢視 p 值和統計量\n";
+    plan += "   - 分析效果量的實際意義\n";
+    plan += "   - 結合視覺化圖表進行解釋\n";
+    plan += "   - 考慮實務上的重要性\n\n";
+
+    // 特定檢定的額外建議
+    if (recommendation.test === 'anova' || recommendation.test === 'kruskal_wallis') {
+      plan += "5. **後續分析建議**:\n";
+      plan += "   - 若檢定結果顯著，進行事後檢定 (post-hoc tests)\n";
+      plan += "   - 多重比較校正 (Bonferroni, FDR 等)\n";
+      plan += "   - 識別具體的組間差異\n\n";
+    }
+
+    // 示例程式碼
+    plan += "**💻 參考程式碼範例**:\n";
+    plan += this.generateCodeExample(recommendation.test, dataStructure);
+
+    return plan;
+  }
+
+  /**
+   * 生成程式碼範例
+   * @param {string} testName - 檢定名稱
+   * @param {Object} dataStructure - 數據結構
+   * @returns {string} 程式碼範例
+   */
+  generateCodeExample(testName, dataStructure) {
+    const numericCol = dataStructure.columns.find(col => col.type === "numeric");
+    const categoricalCol = dataStructure.columns.find(col => col.type === "categorical");
+
+    let example = "```json\n";
+    example += "{\n";
+    example += `  "tool": "perform_${testName}",\n`;
+    example += "  \"data\": {\n";
+
+    switch (testName) {
+      case 'ttest':
+        if (categoricalCol?.uniqueCount === 2) {
+          example += "    \"test_type\": \"independent\",\n";
+          example += `    \"group_column\": \"${categoricalCol.name}\",\n`;
+          example += `    \"value_column\": \"${numericCol?.name}\"\n`;
+        } else {
+          const numericCols = dataStructure.columns.filter(col => col.type === "numeric").slice(0, 2);
+          example += "    \"test_type\": \"paired\",\n";
+          example += `    \"sample1\": \"${numericCols[0]?.name}\",\n`;
+          example += `    \"sample2\": \"${numericCols[1]?.name}\"\n`;
+        }
+        break;
+      
+      case 'mann_whitney':
+        example += `    \"group_column\": \"${categoricalCol?.name}\",\n`;
+        example += `    \"value_column\": \"${numericCol?.name}\",\n`;
+        example += "    \"alternative\": \"two-sided\"\n";
+        break;
+      
+      case 'anova':
+      case 'kruskal_wallis':
+        example += `    \"group_column\": \"${categoricalCol?.name}\",\n`;
+        example += `    \"value_column\": \"${numericCol?.name}\"\n`;
+        break;
+      
+      case 'wilcoxon':
+        const numericCols = dataStructure.columns.filter(col => col.type === "numeric").slice(0, 2);
+        example += `    \"sample1\": \"${numericCols[0]?.name}\",\n`;
+        example += `    \"sample2\": \"${numericCols[1]?.name}\"\n`;
+        break;
+      
+      case 'chisquare':
+        const catCols = dataStructure.columns.filter(col => col.type === "categorical").slice(0, 2);
+        example += `    \"variable1\": \"${catCols[0]?.name}\",\n`;
+        example += `    \"variable2\": \"${catCols[1]?.name}\"\n`;
+        break;
+    }
+
+    example += "  },\n";
+    example += "  \"visualizations\": {\n";
+    example += "    \"include_charts\": true,\n";
+    example += "    \"chart_types\": [\"boxplot\", \"histogram\"],\n";
+    example += "    \"generate_image\": true,\n";
+    example += "    \"image_format\": \"png\"\n";
+    example += "  }\n";
+    example += "}\n";
+    example += "```\n";
+
+    return example;
   }
 }

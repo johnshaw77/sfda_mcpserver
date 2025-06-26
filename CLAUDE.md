@@ -207,6 +207,68 @@ curl -X POST "http://localhost:8080/api/stat/perform_chisquare" \
     }
   }'
 
+# 測試 STAT 工具 - Wilcoxon 符號等級檢定 (基本)
+curl -X POST "http://localhost:8080/api/stat/perform_wilcoxon" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"sample1": [10,12,14,16,18], "sample2": [8,10,12,14,16]}}'
+
+# 測試 STAT 工具 - Wilcoxon 符號等級檢定 + 視覺化整合 (進階)
+curl -X POST "http://localhost:8080/api/stat/perform_wilcoxon" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "sample1": [85, 88, 92, 87, 90, 89, 93],
+      "sample2": [78, 82, 85, 80, 83, 81, 86],
+      "alpha": 0.05,
+      "alternative": "greater"
+    },
+    "context": {
+      "scenario": "medical",
+      "description": "比較治療前後血壓變化的配對分析",
+      "variable_names": {
+        "sample1_name": "治療後血壓",
+        "sample2_name": "治療前血壓"
+      }
+    },
+    "visualizations": {
+      "include_charts": true,
+      "chart_types": ["difference_histogram", "paired_scatter", "boxplot"],
+      "generate_image": true,
+      "image_format": "png"
+    }
+  }'
+
+# 測試 STAT 工具 - Kruskal-Wallis 檢定 (基本)
+curl -X POST "http://localhost:8080/api/stat/perform_kruskal_wallis" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"groups": [[10,12,14,16,18], [8,10,12,14,16], [12,14,16,18,20]]}}'
+
+# 測試 STAT 工具 - Kruskal-Wallis 檢定 + 視覺化整合 (進階)
+curl -X POST "http://localhost:8080/api/stat/perform_kruskal_wallis" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "groups": [
+        [45, 47, 49, 51, 53],
+        [38, 40, 42, 44, 46],
+        [52, 54, 56, 58, 60],
+        [35, 37, 39, 41, 43]
+      ],
+      "alpha": 0.05
+    },
+    "context": {
+      "scenario": "education",
+      "description": "比較四種教學方法對學習成效的影響",
+      "group_names": ["傳統講授", "小組討論", "線上學習", "混合教學"]
+    },
+    "visualizations": {
+      "include_charts": true,
+      "chart_types": ["boxplot", "histogram"],
+      "generate_image": true,
+      "image_format": "png"
+    }
+  }'
+
 # 測試 STAT 工具 - 直方圖創建
 curl -X POST "http://localhost:8080/api/stat/create_histogram" \
   -H "Content-Type: application/json" \
