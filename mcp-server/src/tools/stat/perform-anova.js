@@ -77,6 +77,36 @@ export class PerformANOVATool extends BaseTool {
               },
             },
           },
+          visualizations: {
+            type: "object",
+            properties: {
+              include_charts: {
+                type: "boolean",
+                description: "是否包含統計視覺化圖表",
+                default: false,
+              },
+              chart_types: {
+                type: "array",
+                items: {
+                  type: "string",
+                  enum: ["boxplot", "histogram", "residual_plot"],
+                },
+                description: "需要生成的圖表類型",
+                default: [],
+              },
+              generate_image: {
+                type: "boolean",
+                description: "是否生成 Base64 圖片",
+                default: false,
+              },
+              image_format: {
+                type: "string",
+                description: "圖片格式",
+                enum: ["png", "jpg", "svg"],
+                default: "png",
+              },
+            },
+          },
         },
         required: ["data"],
       },
@@ -100,8 +130,51 @@ export class PerformANOVATool extends BaseTool {
       // 調用統計服務
       const result = await statService.performANOVATest(analysisParams);
 
+      // 處理視覺化需求
+      const visualizations = {};
+      if (args.visualizations?.include_charts && 
+          args.visualizations?.chart_types?.length > 0) {
+        
+        logger.info("開始生成 ANOVA 視覺化圖表", {
+          chartTypes: args.visualizations.chart_types,
+          generateImage: args.visualizations.generate_image
+        });
+
+        for (const chartType of args.visualizations.chart_types) {
+          try {
+            switch (chartType) {
+              case 'boxplot':
+                visualizations.boxplot = await this.createBoxplot(
+                  args.data,
+                  args.visualizations,
+                  args.context
+                );
+                break;
+              case 'histogram':
+                visualizations.histogram = await this.createHistogram(
+                  args.data,
+                  args.visualizations,
+                  args.context
+                );
+                break;
+              case 'residual_plot':
+                visualizations.residual_plot = await this.createResidualPlot(
+                  args.data,
+                  result,
+                  args.visualizations,
+                  args.context
+                );
+                break;
+            }
+          } catch (vizError) {
+            logger.warn(`ANOVA 視覺化圖表 ${chartType} 創建失敗`, { error: vizError.message });
+            visualizations[chartType] = { error: vizError.message };
+          }
+        }
+      }
+
       // 生成情境化報告
-      const report = this.generateANOVAReport(result, args);
+      const report = this.generateANOVAReport(result, args, visualizations);
 
       return {
         content: [
@@ -110,6 +183,17 @@ export class PerformANOVATool extends BaseTool {
             text: report,
           },
         ],
+        _meta: {
+          tool_type: "anova_with_visualization",
+          has_visualizations: Object.keys(visualizations).length > 0,
+          chart_types: args.visualizations?.chart_types || [],
+          image_data: this.extractImageData(visualizations),
+          statistical_result: {
+            f_statistic: result.f_statistic,
+            p_value: result.p_value,
+            effect_size: result.effect_size
+          }
+        }
       };
     } catch (error) {
       logger.error("ANOVA 檢定失敗", { error: error.message, args });
@@ -119,8 +203,8 @@ export class PerformANOVATool extends BaseTool {
       }
 
       throw new ToolExecutionError(
-        ToolErrorType.EXECUTION_ERROR,
         `ANOVA 檢定失敗: ${error.message}`,
+        ToolErrorType.EXECUTION_ERROR,
       );
     }
   }
@@ -132,8 +216,8 @@ export class PerformANOVATool extends BaseTool {
   validateInput(args) {
     if (!args.data || !args.data.groups) {
       throw new ToolExecutionError(
-        ToolErrorType.INVALID_INPUT,
         "groups 參數不能為空",
+        ToolErrorType.INVALID_INPUT,
       );
     }
 
@@ -142,8 +226,8 @@ export class PerformANOVATool extends BaseTool {
     // 檢查組數
     if (!Array.isArray(groups) || groups.length < 2) {
       throw new ToolExecutionError(
-        ToolErrorType.INVALID_INPUT,
         "至少需要 2 組數據進行 ANOVA 分析",
+        ToolErrorType.INVALID_INPUT,
       );
     }
 
@@ -151,15 +235,15 @@ export class PerformANOVATool extends BaseTool {
     groups.forEach((group, index) => {
       if (!Array.isArray(group) || group.length < 2) {
         throw new ToolExecutionError(
-          ToolErrorType.INVALID_INPUT,
           `第 ${index + 1} 組至少需要 2 個數據點`,
+          ToolErrorType.INVALID_INPUT,
         );
       }
 
       if (group.some(val => !Number.isFinite(val))) {
         throw new ToolExecutionError(
-          ToolErrorType.INVALID_INPUT,
           `第 ${index + 1} 組包含無效數字`,
+          ToolErrorType.INVALID_INPUT,
         );
       }
     });
@@ -183,9 +267,10 @@ export class PerformANOVATool extends BaseTool {
    * 生成 ANOVA 檢定報告
    * @param {Object} result - 統計結果
    * @param {Object} args - 原始參數
+   * @param {Object} visualizations - 視覺化結果
    * @returns {string} 格式化報告
    */
-  generateANOVAReport(result, args) {
+  generateANOVAReport(result, args, visualizations = {}) {
     const { scenario, hypothesis, variables } = args.context || {};
 
     let report = "";
@@ -275,6 +360,26 @@ export class PerformANOVATool extends BaseTool {
     // 建議
     report += "## 💡 建議\n\n";
     report += this.generateRecommendations(result, args, isSignificant);
+
+    // 視覺化資訊
+    if (Object.keys(visualizations).length > 0) {
+      report += "\n## 📊 視覺化圖表\n\n";
+      
+      Object.keys(visualizations).forEach(chartType => {
+        const viz = visualizations[chartType];
+        if (viz.error) {
+          report += `- **${this.getChartTypeDescription(chartType)}**: ⚠️ 生成失敗 (${viz.error})\n`;
+        } else {
+          report += `- **${this.getChartTypeDescription(chartType)}**: ✅ 已生成`;
+          if (viz.has_image) {
+            report += ` (包含 ${viz.image_format?.toUpperCase()} 圖片)`;
+          }
+          report += `\n`;
+        }
+      });
+      
+      report += `\n💡 **視覺化說明**: 圖表有助於檢查 ANOVA 假設並提供直觀的組間比較\n`;
+    }
 
     return report;
   }
@@ -492,5 +597,131 @@ export class PerformANOVATool extends BaseTool {
     recommendations += "- 建議重複研究以驗證結果的穩定性\n";
 
     return recommendations;
+  }
+
+  /**
+   * 創建盒鬚圖以進行組間比較
+   */
+  async createBoxplot(data, visualizationOptions, context) {
+    try {
+      const requestData = {
+        groups: data.groups,
+        group_labels: context?.variables?.group_names || 
+          data.groups.map((_, i) => `組別 ${i + 1}`),
+        title: `${context?.variables?.dependent || '依變數'}組間比較`,
+        y_axis_label: context?.variables?.dependent || "數值",
+        generate_image: visualizationOptions.generate_image || false,
+        image_format: visualizationOptions.image_format || "png",
+        figsize: [12, 8],
+        dpi: 100,
+      };
+
+      const response = await fetch(
+        "http://localhost:8000/api/v1/charts/boxplot",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`盒鬚圖 API 調用失敗: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result.success ? result : { error: result.reasoning };
+    } catch (error) {
+      logger.error("創建 ANOVA 盒鬚圖失敗", { error: error.message });
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * 創建直方圖以檢查各組分佈
+   */
+  async createHistogram(data, visualizationOptions, context) {
+    try {
+      // 將所有組的數據合併進行整體分佈檢查
+      const combinedData = data.groups.flat();
+
+      const requestData = {
+        values: combinedData,
+        bins: 20,
+        title: `${context?.variables?.dependent || '依變數'}整體分佈`,
+        x_axis_label: context?.variables?.dependent || "數值",
+        y_axis_label: "頻率",
+        generate_image: visualizationOptions.generate_image || false,
+        image_format: visualizationOptions.image_format || "png",
+        figsize: [10, 6],
+        dpi: 100,
+      };
+
+      const response = await fetch(
+        "http://localhost:8000/api/v1/charts/histogram",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`直方圖 API 調用失敗: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result.success ? result : { error: result.reasoning };
+    } catch (error) {
+      logger.error("創建 ANOVA 直方圖失敗", { error: error.message });
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * 創建殘差圖以檢查 ANOVA 假設
+   */
+  async createResidualPlot(data, result, visualizationOptions, context) {
+    try {
+      // 注意: 目前 sfda_stat 後端可能還沒有殘差圖 API
+      // 這裡提供一個框架，未來可以擴展
+      logger.warn("殘差圖功能尚未實作於後端服務");
+      return { 
+        error: "殘差圖功能尚未實作",
+        placeholder: true 
+      };
+    } catch (error) {
+      logger.error("創建殘差圖失敗", { error: error.message });
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * 獲取圖表類型描述
+   */
+  getChartTypeDescription(chartType) {
+    const descriptions = {
+      boxplot: "盒鬚圖 (組間比較)",
+      histogram: "直方圖 (分佈檢查)",
+      residual_plot: "殘差圖 (假設檢驗)"
+    };
+    return descriptions[chartType] || chartType;
+  }
+
+  /**
+   * 提取圖片數據用於 _meta
+   */
+  extractImageData(visualizations) {
+    const imageData = {};
+    Object.keys(visualizations).forEach(key => {
+      const viz = visualizations[key];
+      if (viz.has_image && viz.image_base64) {
+        imageData[key] = {
+          format: viz.image_format,
+          size: viz.image_base64.length
+        };
+      }
+    });
+    return Object.keys(imageData).length > 0 ? imageData : null;
   }
 }
