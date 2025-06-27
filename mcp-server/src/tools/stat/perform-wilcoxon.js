@@ -77,6 +77,36 @@ export class PerformWilcoxonTool extends BaseTool {
               },
             },
           },
+          visualizations: {
+            type: "object",
+            properties: {
+              include_charts: {
+                type: "boolean",
+                description: "是否包含統計視覺化圖表",
+                default: false,
+              },
+              chart_types: {
+                type: "array",
+                items: {
+                  type: "string",
+                  enum: ["difference_histogram", "paired_scatter", "boxplot"],
+                },
+                description: "需要生成的圖表類型",
+                default: [],
+              },
+              generate_image: {
+                type: "boolean",
+                description: "是否生成 Base64 圖片",
+                default: false,
+              },
+              image_format: {
+                type: "string",
+                description: "圖片格式",
+                enum: ["png", "jpg", "svg"],
+                default: "png",
+              },
+            },
+          },
         },
         required: ["data"],
       },
@@ -127,8 +157,50 @@ export class PerformWilcoxonTool extends BaseTool {
         params.context || {},
       );
 
+      // 處理視覺化需求
+      const visualizations = {};
+      if (params.visualizations?.include_charts && 
+          params.visualizations?.chart_types?.length > 0) {
+        
+        logger.info("開始生成 Wilcoxon 視覺化圖表", {
+          chartTypes: params.visualizations.chart_types,
+          generateImage: params.visualizations.generate_image
+        });
+
+        for (const chartType of params.visualizations.chart_types) {
+          try {
+            switch (chartType) {
+              case 'difference_histogram':
+                visualizations.difference_histogram = await this.createDifferenceHistogram(
+                  params.data,
+                  params.visualizations,
+                  params.context
+                );
+                break;
+              case 'paired_scatter':
+                visualizations.paired_scatter = await this.createPairedScatter(
+                  params.data,
+                  params.visualizations,
+                  params.context
+                );
+                break;
+              case 'boxplot':
+                visualizations.boxplot = await this.createBoxplot(
+                  params.data,
+                  params.visualizations,
+                  params.context
+                );
+                break;
+            }
+          } catch (vizError) {
+            logger.warn(`Wilcoxon 視覺化圖表 ${chartType} 創建失敗`, { error: vizError.message });
+            visualizations[chartType] = { error: vizError.message };
+          }
+        }
+      }
+
       // 生成詳細報告
-      const report = this.generateWilcoxonReport(result, params);
+      const report = this.generateWilcoxonReport(result, params, visualizations);
 
       // 記錄執行資訊
       logger.info("Wilcoxon 符號等級檢定執行成功", {
@@ -144,7 +216,20 @@ export class PerformWilcoxonTool extends BaseTool {
         data: {
           result: result,
           report: report,
+          visualizations: Object.keys(visualizations).length > 0 ? visualizations : null,
         },
+        _meta: {
+          tool_type: "wilcoxon_with_visualization",
+          has_visualizations: Object.keys(visualizations).length > 0,
+          chart_types: params.visualizations?.chart_types || [],
+          image_data: this.extractImageData(visualizations),
+          statistical_result: {
+            w_statistic: result.w_statistic,
+            p_value: result.p_value,
+            effect_size: result.effect_size,
+            reject_null: result.reject_null
+          }
+        }
       };
     } catch (error) {
       // 記錄錯誤
@@ -168,9 +253,10 @@ export class PerformWilcoxonTool extends BaseTool {
    * 生成 Wilcoxon 符號等級檢定詳細報告
    * @param {Object} result - 統計結果
    * @param {Object} params - 輸入參數
+   * @param {Object} visualizations - 視覺化結果
    * @returns {string} 格式化報告
    */
-  generateWilcoxonReport(result, params) {
+  generateWilcoxonReport(result, params, visualizations = {}) {
     const alpha = params.data.alpha || 0.05;
     const isSignificant = result.reject_null;
 
@@ -241,6 +327,26 @@ export class PerformWilcoxonTool extends BaseTool {
       report += `- 建議檢查配對是否適當，或考慮增加樣本大小\n`;
     }
 
+    // 視覺化資訊
+    if (Object.keys(visualizations).length > 0) {
+      report += `\n## 📊 視覺化圖表\n\n`;
+      
+      Object.keys(visualizations).forEach(chartType => {
+        const viz = visualizations[chartType];
+        if (viz.error) {
+          report += `- **${this.getChartTypeDescription(chartType)}**: ⚠️ 生成失敗 (${viz.error})\n`;
+        } else {
+          report += `- **${this.getChartTypeDescription(chartType)}**: ✅ 已生成`;
+          if (viz.has_image) {
+            report += ` (包含 ${viz.image_format?.toUpperCase()} 圖片)`;
+          }
+          report += `\n`;
+        }
+      });
+      
+      report += `\n💡 **視覺化說明**: 差值直方圖有助於檢查配對差異的分佈特性，散點圖顯示配對關係\n`;
+    }
+
     return report;
   }
 
@@ -276,5 +382,154 @@ export class PerformWilcoxonTool extends BaseTool {
     if (absR < 0.3) return "小效果";
     if (absR < 0.5) return "中等效果";
     return "大效果";
+  }
+
+  /**
+   * 創建配對差異直方圖
+   */
+  async createDifferenceHistogram(data, visualizationOptions, context) {
+    try {
+      // 計算配對差異
+      const differences = data.sample1.map((v, i) => v - data.sample2[i]);
+
+      const requestData = {
+        values: differences,
+        bins: 15,
+        title: `${context?.variable_names?.sample1_name || '前後測'}配對差異分佈`,
+        x_axis_label: "差異值",
+        y_axis_label: "頻率",
+        generate_image: visualizationOptions.generate_image || false,
+        image_format: visualizationOptions.image_format || "png",
+        figsize: [10, 6],
+        dpi: 100,
+      };
+
+      const response = await fetch(
+        "http://localhost:8000/api/v1/charts/histogram",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`差異直方圖 API 調用失敗: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result.success ? result : { error: result.reasoning };
+    } catch (error) {
+      logger.error("創建 Wilcoxon 差異直方圖失敗", { error: error.message });
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * 創建配對散點圖
+   */
+  async createPairedScatter(data, visualizationOptions, context) {
+    try {
+      const requestData = {
+        x_values: data.sample1,
+        y_values: data.sample2,
+        title: `${context?.variable_names?.sample1_name || '前測'} vs ${context?.variable_names?.sample2_name || '後測'}配對散點圖`,
+        x_axis_label: context?.variable_names?.sample1_name || "前測值",
+        y_axis_label: context?.variable_names?.sample2_name || "後測值",
+        generate_image: visualizationOptions.generate_image || false,
+        image_format: visualizationOptions.image_format || "png",
+        figsize: [10, 8],
+        dpi: 100,
+        add_diagonal: true, // 添加對角線以顯示無變化基準
+      };
+
+      const response = await fetch(
+        "http://localhost:8000/api/v1/charts/scatter",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`配對散點圖 API 調用失敗: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result.success ? result : { error: result.reasoning };
+    } catch (error) {
+      logger.error("創建 Wilcoxon 配對散點圖失敗", { error: error.message });
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * 創建盒鬚圖比較兩次測量
+   */
+  async createBoxplot(data, visualizationOptions, context) {
+    try {
+      const requestData = {
+        groups: [data.sample1, data.sample2],
+        group_labels: [
+          context?.variable_names?.sample1_name || "前測",
+          context?.variable_names?.sample2_name || "後測"
+        ],
+        title: `${context?.variable_names?.sample1_name || '前後測'}數據分佈比較`,
+        y_axis_label: "數值",
+        generate_image: visualizationOptions.generate_image || false,
+        image_format: visualizationOptions.image_format || "png",
+        figsize: [10, 6],
+        dpi: 100,
+      };
+
+      const response = await fetch(
+        "http://localhost:8000/api/v1/charts/boxplot",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`盒鬚圖 API 調用失敗: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result.success ? result : { error: result.reasoning };
+    } catch (error) {
+      logger.error("創建 Wilcoxon 盒鬚圖失敗", { error: error.message });
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * 獲取圖表類型描述
+   */
+  getChartTypeDescription(chartType) {
+    const descriptions = {
+      difference_histogram: "差異直方圖 (配對差異分佈)",
+      paired_scatter: "配對散點圖 (前後測關係)",
+      boxplot: "盒鬚圖 (前後測比較)"
+    };
+    return descriptions[chartType] || chartType;
+  }
+
+  /**
+   * 提取圖片數據用於 _meta
+   */
+  extractImageData(visualizations) {
+    const imageData = {};
+    Object.keys(visualizations).forEach(key => {
+      const viz = visualizations[key];
+      if (viz.has_image && viz.image_base64) {
+        imageData[key] = {
+          format: viz.image_format,
+          size: viz.image_base64.length
+        };
+      }
+    });
+    return Object.keys(imageData).length > 0 ? imageData : null;
   }
 }

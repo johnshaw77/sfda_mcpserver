@@ -197,6 +197,75 @@
 }
 ```
 
+## AI 提問範例
+
+### 範例 1: 市場調研分析
+**用戶提問**: "我做了一項消費者偏好調查，想知道年齡層和產品偏好是否有關係。我的數據是：18-30歲 (產品A: 45人, 產品B: 35人, 產品C: 20人)，31-45歲 (產品A: 30人, 產品B: 50人, 產品C: 25人)，46歲以上 (產品A: 25人, 產品B: 40人, 產品C: 40人)。如何分析這個關聯性？"
+
+**AI 回應**: 您想分析兩個分類變數（年齡層和產品偏好）之間是否存在關聯性，這是典型的卡方獨立性檢定情境。這個檢定可以告訴我們年齡層和產品偏好是否相互獨立。
+
+**工具調用**:
+```json
+{
+  "tool": "perform_chisquare",
+  "data": {
+    "observed": [
+      [45, 35, 20],
+      [30, 50, 25],
+      [25, 40, 40]
+    ],
+    "alpha": 0.05
+  },
+  "context": {
+    "scenario": "business",
+    "description": "分析年齡層與產品偏好的關聯性",
+    "variable1_name": "年齡層",
+    "variable2_name": "產品偏好",
+    "row_labels": ["18-30歲", "31-45歲", "46歲以上"],
+    "col_labels": ["產品A", "產品B", "產品C"]
+  },
+  "visualizations": {
+    "include_charts": true,
+    "chart_types": ["bar_chart", "mosaic_plot"],
+    "generate_image": true,
+    "image_format": "png"
+  }
+}
+```
+
+### 範例 2: 醫療研究療效分析
+**用戶提問**: "我研究兩種治療方法的效果。治療方法A: 有效 35人，無效 15人；治療方法B: 有效 42人，無效 8人。這兩種方法的效果有顯著差異嗎？"
+
+**AI 回應**: 您想比較兩種治療方法的效果，這是典型的 2×2 列聯表分析。卡方檢定可以幫助我們判斷治療方法和療效之間是否存在顯著關聯。
+
+**工具調用**:
+```json
+{
+  "tool": "perform_chisquare",
+  "data": {
+    "observed": [
+      [35, 15],
+      [42, 8]
+    ],
+    "alpha": 0.05
+  },
+  "context": {
+    "scenario": "medical",
+    "description": "比較兩種治療方法的療效差異",
+    "variable1_name": "治療方法",
+    "variable2_name": "治療效果",
+    "row_labels": ["治療方法A", "治療方法B"],
+    "col_labels": ["有效", "無效"]
+  },
+  "visualizations": {
+    "include_charts": true,
+    "chart_types": ["bar_chart", "residual_plot"],
+    "generate_image": true,
+    "image_format": "png"
+  }
+}
+```
+
 ## 預期結果
 
 ### 統計專業用戶期望看到：

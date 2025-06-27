@@ -71,6 +71,41 @@ export class PerformChiSquareTool extends BaseTool {
                   variable2: { type: "string" },
                 },
               },
+              category_labels: {
+                type: "array",
+                items: { type: "string" },
+                description: "類別標籤陣列",
+              },
+            },
+          },
+          visualizations: {
+            type: "object",
+            properties: {
+              include_charts: {
+                type: "boolean",
+                description: "是否包含統計視覺化圖表",
+                default: false,
+              },
+              chart_types: {
+                type: "array",
+                items: {
+                  type: "string",
+                  enum: ["bar_chart", "residual_plot", "mosaic_plot"],
+                },
+                description: "需要生成的圖表類型",
+                default: [],
+              },
+              generate_image: {
+                type: "boolean",
+                description: "是否生成 Base64 圖片",
+                default: false,
+              },
+              image_format: {
+                type: "string",
+                description: "圖片格式",
+                enum: ["png", "jpg", "svg"],
+                default: "png",
+              },
             },
           },
         },
@@ -96,8 +131,53 @@ export class PerformChiSquareTool extends BaseTool {
       // 調用統計服務
       const result = await statService.performChiSquareTest(analysisParams);
 
+      // 處理視覺化需求
+      const visualizations = {};
+      if (args.visualizations?.include_charts && 
+          args.visualizations?.chart_types?.length > 0) {
+        
+        logger.info("開始生成卡方檢定視覺化圖表", {
+          chartTypes: args.visualizations.chart_types,
+          generateImage: args.visualizations.generate_image
+        });
+
+        for (const chartType of args.visualizations.chart_types) {
+          try {
+            switch (chartType) {
+              case 'bar_chart':
+                visualizations.bar_chart = await this.createBarChart(
+                  args.data,
+                  result,
+                  args.visualizations,
+                  args.context
+                );
+                break;
+              case 'residual_plot':
+                visualizations.residual_plot = await this.createResidualPlot(
+                  args.data,
+                  result,
+                  args.visualizations,
+                  args.context
+                );
+                break;
+              case 'mosaic_plot':
+                visualizations.mosaic_plot = await this.createMosaicPlot(
+                  args.data,
+                  result,
+                  args.visualizations,
+                  args.context
+                );
+                break;
+            }
+          } catch (vizError) {
+            logger.warn(`卡方檢定視覺化圖表 ${chartType} 創建失敗`, { error: vizError.message });
+            visualizations[chartType] = { error: vizError.message };
+          }
+        }
+      }
+
       // 生成情境化報告
-      const report = this.generateChiSquareReport(result, args);
+      const report = this.generateChiSquareReport(result, args, visualizations);
 
       return {
         content: [
@@ -106,6 +186,18 @@ export class PerformChiSquareTool extends BaseTool {
             text: report,
           },
         ],
+        _meta: {
+          tool_type: "chisquare_with_visualization",
+          has_visualizations: Object.keys(visualizations).length > 0,
+          chart_types: args.visualizations?.chart_types || [],
+          image_data: this.extractImageData(visualizations),
+          statistical_result: {
+            statistic: result.statistic,
+            p_value: result.p_value,
+            df: result.df,
+            effect_size: result.effect_size
+          }
+        }
       };
     } catch (error) {
       logger.error("卡方檢定失敗", { error: error.message, args });
@@ -115,8 +207,8 @@ export class PerformChiSquareTool extends BaseTool {
       }
 
       throw new ToolExecutionError(
-        ToolErrorType.EXECUTION_ERROR,
         `卡方檢定失敗: ${error.message}`,
+        ToolErrorType.EXECUTION_ERROR,
       );
     }
   }
@@ -128,8 +220,8 @@ export class PerformChiSquareTool extends BaseTool {
   validateInput(args) {
     if (!args.data || !args.data.observed) {
       throw new ToolExecutionError(
-        ToolErrorType.INVALID_INPUT,
         "觀察頻數不能為空",
+        ToolErrorType.INVALID_INPUT,
       );
     }
 
@@ -138,8 +230,8 @@ export class PerformChiSquareTool extends BaseTool {
     // 檢查是否為有效的數字陣列
     if (!Array.isArray(observed) || observed.length < 2) {
       throw new ToolExecutionError(
-        ToolErrorType.INVALID_INPUT,
         "觀察頻數至少需要 2 個值",
+        ToolErrorType.INVALID_INPUT,
       );
     }
 
@@ -147,8 +239,8 @@ export class PerformChiSquareTool extends BaseTool {
     const flattenedObserved = observed.flat();
     if (flattenedObserved.some(val => !Number.isFinite(val) || val < 0)) {
       throw new ToolExecutionError(
-        ToolErrorType.INVALID_INPUT,
         "所有觀察頻數必須是非負數字",
+        ToolErrorType.INVALID_INPUT,
       );
     }
 
@@ -160,15 +252,15 @@ export class PerformChiSquareTool extends BaseTool {
         expected.length !== flattenedObserved.length
       ) {
         throw new ToolExecutionError(
-          ToolErrorType.INVALID_INPUT,
           "期望頻數的長度必須與觀察頻數一致",
+          ToolErrorType.INVALID_INPUT,
         );
       }
 
       if (expected.some(val => !Number.isFinite(val) || val <= 0)) {
         throw new ToolExecutionError(
-          ToolErrorType.INVALID_INPUT,
           "所有期望頻數必須是正數",
+          ToolErrorType.INVALID_INPUT,
         );
       }
     }
@@ -194,9 +286,10 @@ export class PerformChiSquareTool extends BaseTool {
    * 生成卡方檢定報告
    * @param {Object} result - 統計結果
    * @param {Object} args - 原始參數
+   * @param {Object} visualizations - 視覺化結果
    * @returns {string} 格式化報告
    */
-  generateChiSquareReport(result, args) {
+  generateChiSquareReport(result, args, visualizations = {}) {
     const { scenario, hypothesis, variables } = args.context || {};
     const isGoodnessOfFit = args.data.expected !== undefined;
 
@@ -282,6 +375,26 @@ export class PerformChiSquareTool extends BaseTool {
     // 建議
     report += "## 💡 建議\n\n";
     report += this.generateRecommendations(result, args, isSignificant);
+
+    // 視覺化資訊
+    if (Object.keys(visualizations).length > 0) {
+      report += "\n## 📊 視覺化圖表\n\n";
+      
+      Object.keys(visualizations).forEach(chartType => {
+        const viz = visualizations[chartType];
+        if (viz.error) {
+          report += `- **${this.getChartTypeDescription(chartType)}**: ⚠️ 生成失敗 (${viz.error})\n`;
+        } else {
+          report += `- **${this.getChartTypeDescription(chartType)}**: ✅ 已生成`;
+          if (viz.has_image) {
+            report += ` (包含 ${viz.image_format?.toUpperCase()} 圖片)`;
+          }
+          report += `\n`;
+        }
+      });
+      
+      report += `\n💡 **視覺化說明**: 長條圖直觀展示觀察頻率與期望頻率的差異，有助於識別卡方檢定的顯著來源\n`;
+    }
 
     return report;
   }
@@ -471,5 +584,129 @@ export class PerformChiSquareTool extends BaseTool {
     recommendations += "- 建議重複研究以驗證結果的穩定性\n";
 
     return recommendations;
+  }
+
+  /**
+   * 創建長條圖比較觀察頻率與期望頻率
+   */
+  async createBarChart(data, result, visualizationOptions, context) {
+    try {
+      // 準備長條圖數據
+      const observedFreq = result.observed_freq || data.observed;
+      const expectedFreq = result.expected_freq;
+      
+      if (!expectedFreq) {
+        throw new Error("缺少期望頻率數據，無法創建比較長條圖");
+      }
+
+      // 扁平化數據（處理多維陣列）
+      const flatObserved = Array.isArray(observedFreq[0]) ? observedFreq.flat() : observedFreq;
+      const flatExpected = Array.isArray(expectedFreq[0]) ? expectedFreq.flat() : expectedFreq;
+
+      // 準備標籤
+      const labels = context?.category_labels || 
+                    flatObserved.map((_, i) => `類別 ${i + 1}`);
+
+      // 先創建觀察頻率圖表
+      const requestData = {
+        chart_type: "bar",
+        labels: labels,
+        values: flatObserved,
+        title: "觀察頻率 vs 期望頻率比較",
+        x_axis_label: "類別",
+        y_axis_label: "頻率",
+        generate_image: visualizationOptions.generate_image || false,
+        image_format: visualizationOptions.image_format || "png",
+        // 額外數據用於比較（如果後端支援）
+        comparison_data: {
+          expected_frequencies: flatExpected,
+          observed_frequencies: flatObserved
+        }
+      };
+
+      const response = await fetch(
+        "http://localhost:8000/api/v1/charts/simple",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`長條圖 API 調用失敗: ${response.status}`);
+      }
+
+      const chartResult = await response.json();
+      return chartResult.success ? chartResult : { error: chartResult.reasoning };
+    } catch (error) {
+      logger.error("創建卡方檢定長條圖失敗", { error: error.message });
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * 創建殘差圖顯示標準化殘差
+   */
+  async createResidualPlot(data, result, visualizationOptions, context) {
+    try {
+      // 注意: 目前 sfda_stat 後端可能還沒有殘差圖 API
+      // 這裡提供一個框架，未來可以擴展
+      logger.warn("殘差圖功能尚未實作於後端服務");
+      return { 
+        error: "殘差圖功能尚未實作",
+        placeholder: true 
+      };
+    } catch (error) {
+      logger.error("創建殘差圖失敗", { error: error.message });
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * 創建馬賽克圖顯示列聯表結構
+   */
+  async createMosaicPlot(data, result, visualizationOptions, context) {
+    try {
+      // 注意: 目前 sfda_stat 後端可能還沒有馬賽克圖 API
+      // 這裡提供一個框架，未來可以擴展
+      logger.warn("馬賽克圖功能尚未實作於後端服務");
+      return { 
+        error: "馬賽克圖功能尚未實作",
+        placeholder: true 
+      };
+    } catch (error) {
+      logger.error("創建馬賽克圖失敗", { error: error.message });
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * 獲取圖表類型描述
+   */
+  getChartTypeDescription(chartType) {
+    const descriptions = {
+      bar_chart: "長條圖 (觀察vs期望頻率)",
+      residual_plot: "殘差圖 (標準化殘差)",
+      mosaic_plot: "馬賽克圖 (列聯表結構)"
+    };
+    return descriptions[chartType] || chartType;
+  }
+
+  /**
+   * 提取圖片數據用於 _meta
+   */
+  extractImageData(visualizations) {
+    const imageData = {};
+    Object.keys(visualizations).forEach(key => {
+      const viz = visualizations[key];
+      if (viz.has_image && viz.image_base64) {
+        imageData[key] = {
+          format: viz.image_format,
+          size: viz.image_base64.length
+        };
+      }
+    });
+    return Object.keys(imageData).length > 0 ? imageData : null;
   }
 }

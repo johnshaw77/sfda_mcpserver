@@ -297,3 +297,68 @@ curl -X POST http://localhost:3000/tools/stat/perform-kruskal-wallis \
 - Bonferroni 校正
 - Steel-Dwass test
 - Conover-Iman test
+
+## AI 提問範例
+
+### 範例 1: 教育研究情境
+**用戶提問**: "我是教育研究者，想比較四種不同教學方法對學生學習成效的影響。我有四組學生的測驗分數：傳統教學 [75, 78, 72, 80, 76, 74, 79, 77]，翻轉教室 [82, 85, 81, 88, 84, 83, 87, 86]，專案導向 [78, 81, 77, 84, 80, 79, 83, 82]，混成學習 [85, 88, 84, 91, 87, 86, 90, 89]。如何分析這四種方法是否有差異？"
+
+**AI 回應**: 您想比較四個獨立群組（教學方法）的學習成效，這是典型的多組比較問題。由於我們有超過兩組的比較，且學習成績可能不完全符合常態分佈，建議使用 Kruskal-Wallis 檢定（非參數版本的 ANOVA）。
+
+**工具調用**:
+```json
+{
+  "tool": "perform_kruskal_wallis",
+  "data": {
+    "groups": [
+      [75, 78, 72, 80, 76, 74, 79, 77],
+      [82, 85, 81, 88, 84, 83, 87, 86],
+      [78, 81, 77, 84, 80, 79, 83, 82],
+      [85, 88, 84, 91, 87, 86, 90, 89]
+    ],
+    "alpha": 0.05
+  },
+  "context": {
+    "scenario": "education",
+    "description": "比較四種教學方法對學習成效的影響",
+    "group_names": ["傳統教學", "翻轉教室", "專案導向", "混成學習"]
+  },
+  "visualizations": {
+    "include_charts": true,
+    "chart_types": ["boxplot", "histogram"],
+    "generate_image": true,
+    "image_format": "png"
+  }
+}
+```
+
+### 範例 2: 品質控制情境
+**用戶提問**: "我是品管經理，想比較三個不同工廠生產的產品品質評分。工廠A的評分: [8.2, 8.5, 8.1, 8.7, 8.3, 8.4, 8.6]，工廠B的評分: [7.8, 8.0, 7.9, 8.2, 7.7, 8.1, 7.9]，工廠C的評分: [9.1, 9.3, 9.0, 9.4, 9.2, 9.5, 9.1]。三個工廠的品質是否有顯著差異？"
+
+**AI 回應**: 您想比較三個工廠的產品品質，這需要進行多組比較分析。由於品質評分可能不符合常態分佈，而且您有三個獨立的群組，Kruskal-Wallis 檢定是最適合的方法。
+
+**工具調用**:
+```json
+{
+  "tool": "perform_kruskal_wallis",
+  "data": {
+    "groups": [
+      [8.2, 8.5, 8.1, 8.7, 8.3, 8.4, 8.6],
+      [7.8, 8.0, 7.9, 8.2, 7.7, 8.1, 7.9],
+      [9.1, 9.3, 9.0, 9.4, 9.2, 9.5, 9.1]
+    ],
+    "alpha": 0.05
+  },
+  "context": {
+    "scenario": "quality",
+    "description": "比較三個工廠的產品品質評分差異",
+    "group_names": ["工廠A", "工廠B", "工廠C"]
+  },
+  "visualizations": {
+    "include_charts": true,
+    "chart_types": ["boxplot", "rank_plot"],
+    "generate_image": true,
+    "image_format": "png"
+  }
+}
+```

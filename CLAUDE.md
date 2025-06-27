@@ -57,15 +57,217 @@ curl -X POST "http://localhost:8080/api/mil/get_mil_list" \
   -H "Content-Type: application/json" \
   -d '{"page": 1, "limit": 10}'
 
-# 測試 STAT 工具 - T檢定
+# 測試 STAT 工具 - T檢定 (基本)
 curl -X POST "http://localhost:8080/api/stat/perform_ttest" \
   -H "Content-Type: application/json" \
   -d '{"data": {"sample1": [1,2,3,4,5], "sample2": [6,7,8,9,10]}}'
 
-# 測試 STAT 工具 - Mann-Whitney U 檢定
+# 測試 STAT 工具 - T檢定 + 視覺化整合 (進階)
+curl -X POST "http://localhost:8080/api/stat/perform_ttest" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "sample1": [23, 25, 27, 29, 31, 33, 35],
+      "sample2": [18, 20, 22, 24, 26, 28, 30]
+    },
+    "context": {
+      "scenario": "medical",
+      "description": "比較兩組病患的治療效果",
+      "variable_names": {
+        "sample1_name": "治療組",
+        "sample2_name": "對照組"
+      }
+    },
+    "visualizations": {
+      "include_charts": true,
+      "chart_types": ["histogram", "boxplot"],
+      "generate_image": true,
+      "image_format": "png"
+    }
+  }'
+
+# 測試 STAT 工具 - ANOVA 檢定 (基本)
+curl -X POST "http://localhost:8080/api/stat/perform_anova" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"groups": [[12,14,16,18,20], [22,24,26,28,30], [32,34,36,38,40]]}}'
+
+# 測試 STAT 工具 - ANOVA 檢定 + 視覺化整合 (進階)
+curl -X POST "http://localhost:8080/api/stat/perform_anova" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "groups": [
+        [85, 87, 89, 91, 93],
+        [75, 77, 79, 81, 83],
+        [95, 97, 99, 101, 103]
+      ],
+      "alpha": 0.05
+    },
+    "context": {
+      "scenario": "education",
+      "hypothesis": "不同教學方法對學習成果有顯著影響",
+      "variables": {
+        "dependent": "考試成績",
+        "independent": "教學方法",
+        "group_names": ["傳統教學", "線上教學", "混合教學"]
+      }
+    },
+    "visualizations": {
+      "include_charts": true,
+      "chart_types": ["boxplot", "histogram"],
+      "generate_image": true,
+      "image_format": "png"
+    }
+  }'
+
+# 測試 STAT 工具 - Mann-Whitney U 檢定 (基本)
 curl -X POST "http://localhost:8080/api/stat/perform_mann_whitney" \
   -H "Content-Type: application/json" \
   -d '{"data": {"sample1": [1,2,3,4,5], "sample2": [6,7,8,9,10]}}'
+
+# 測試 STAT 工具 - Mann-Whitney U 檢定 + 視覺化整合 (進階)
+curl -X POST "http://localhost:8080/api/stat/perform_mann_whitney" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "sample1": [45, 47, 49, 51, 53, 55, 57],
+      "sample2": [38, 40, 42, 44, 46, 48, 50],
+      "alpha": 0.05,
+      "alternative": "two-sided"
+    },
+    "context": {
+      "scenario": "medical",
+      "description": "比較兩種藥物治療效果的非參數分析",
+      "variable_names": {
+        "sample1_name": "新藥組",
+        "sample2_name": "傳統藥物組"
+      }
+    },
+    "visualizations": {
+      "include_charts": true,
+      "chart_types": ["boxplot", "histogram"],
+      "generate_image": true,
+      "image_format": "png"
+    }
+  }'
+
+# 測試 STAT 工具 - 卡方檢定 (基本)
+curl -X POST "http://localhost:8080/api/stat/perform_chisquare" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"observed": [10, 15, 20, 25], "expected": [12, 18, 22, 23]}}'
+
+# 測試 STAT 工具 - 卡方檢定 + 視覺化整合 (進階)
+curl -X POST "http://localhost:8080/api/stat/perform_chisquare" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "observed": [25, 18, 35, 42, 28],
+      "expected": [30, 20, 32, 38, 30],
+      "alpha": 0.05
+    },
+    "context": {
+      "scenario": "quality",
+      "hypothesis": "產品缺陷分佈符合預期品質標準",
+      "variables": {
+        "variable1": "產品類型",
+        "variable2": "缺陷等級"
+      },
+      "category_labels": ["類型A", "類型B", "類型C", "類型D", "類型E"]
+    },
+    "visualizations": {
+      "include_charts": true,
+      "chart_types": ["bar_chart"],
+      "generate_image": true,
+      "image_format": "png"
+    }
+  }'
+
+# 測試 STAT 工具 - 卡方獨立性檢定 + 視覺化 (列聯表)
+curl -X POST "http://localhost:8080/api/stat/perform_chisquare" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "observed": [[15, 25], [20, 30], [10, 35]],
+      "alpha": 0.01
+    },
+    "context": {
+      "scenario": "medical",
+      "hypothesis": "治療方法與療效之間存在關聯性",
+      "variables": {
+        "variable1": "治療方法",
+        "variable2": "療效"
+      },
+      "category_labels": ["療效差", "療效佳"]
+    },
+    "visualizations": {
+      "include_charts": true,
+      "chart_types": ["bar_chart"],
+      "generate_image": true,
+      "image_format": "png"
+    }
+  }'
+
+# 測試 STAT 工具 - Wilcoxon 符號等級檢定 (基本)
+curl -X POST "http://localhost:8080/api/stat/perform_wilcoxon" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"sample1": [10,12,14,16,18], "sample2": [8,10,12,14,16]}}'
+
+# 測試 STAT 工具 - Wilcoxon 符號等級檢定 + 視覺化整合 (進階)
+curl -X POST "http://localhost:8080/api/stat/perform_wilcoxon" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "sample1": [85, 88, 92, 87, 90, 89, 93],
+      "sample2": [78, 82, 85, 80, 83, 81, 86],
+      "alpha": 0.05,
+      "alternative": "greater"
+    },
+    "context": {
+      "scenario": "medical",
+      "description": "比較治療前後血壓變化的配對分析",
+      "variable_names": {
+        "sample1_name": "治療後血壓",
+        "sample2_name": "治療前血壓"
+      }
+    },
+    "visualizations": {
+      "include_charts": true,
+      "chart_types": ["difference_histogram", "paired_scatter", "boxplot"],
+      "generate_image": true,
+      "image_format": "png"
+    }
+  }'
+
+# 測試 STAT 工具 - Kruskal-Wallis 檢定 (基本)
+curl -X POST "http://localhost:8080/api/stat/perform_kruskal_wallis" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"groups": [[10,12,14,16,18], [8,10,12,14,16], [12,14,16,18,20]]}}'
+
+# 測試 STAT 工具 - Kruskal-Wallis 檢定 + 視覺化整合 (進階)
+curl -X POST "http://localhost:8080/api/stat/perform_kruskal_wallis" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "groups": [
+        [45, 47, 49, 51, 53],
+        [38, 40, 42, 44, 46],
+        [52, 54, 56, 58, 60],
+        [35, 37, 39, 41, 43]
+      ],
+      "alpha": 0.05
+    },
+    "context": {
+      "scenario": "education",
+      "description": "比較四種教學方法對學習成效的影響",
+      "group_names": ["傳統講授", "小組討論", "線上學習", "混合教學"]
+    },
+    "visualizations": {
+      "include_charts": true,
+      "chart_types": ["boxplot", "histogram"],
+      "generate_image": true,
+      "image_format": "png"
+    }
+  }'
 
 # 測試 STAT 工具 - 直方圖創建
 curl -X POST "http://localhost:8080/api/stat/create_histogram" \
