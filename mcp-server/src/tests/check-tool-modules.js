@@ -3,8 +3,8 @@
  * 檢查工具模組屬性測試腳本
  */
 
-import logger from "./src/config/logger.js";
-import { registerAllTools, getRegisteredTools } from "./src/tools/index.js";
+import logger from "../config/logger.js";
+import { registerAllTools, getRegisteredTools } from "../tools/index.js";
 
 async function checkToolModules() {
   try {

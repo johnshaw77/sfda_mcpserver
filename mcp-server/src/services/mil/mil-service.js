@@ -200,6 +200,79 @@ class MILService {
 
       const intelligentSummary = generateSummary(stats, filters);
 
+      // 🤖 新增：動態生成 AI 指導提示詞
+      const generateAIInstructions = (stats, filters, data) => {
+        const instructions = [];
+
+        // 🎯 精簡核心指導 - 只保留最關鍵的規則
+        instructions.push(
+          "**重要：只能基於統計摘要進行分析，不能編造具體專案**",
+        );
+        instructions.push(
+          "- 如果用戶未表明欄位，則至少列出 SerialNumber, TypeName, MidTypeName, is_APPLY, Importance, Status, RecordDate, Proposer_Name, DRI_EmpName, DRI_Dept, DelayDay, IssueDiscription, Location, PlanFinishDate, ActualFinishDate 欄位",
+        );
+        instructions.push("");
+
+        // 根據延遲天數條件調整重點
+        if (filters.delayDayMin >= 10) {
+          instructions.push("🚨 **高風險專案重點**：");
+          instructions.push(
+            `- 這些專案延遲≥${filters.delayDayMin}天，屬於高風險狀態`,
+          );
+          instructions.push("- 分析延遲原因：資源不足、技術困難、溝通問題等");
+          instructions.push("- 評估 DRI 負責人的工作負荷分配");
+          instructions.push("- 提供立即可執行的風險控制措施");
+          instructions.push("");
+        } else if (stats.highRiskCount > 0) {
+          instructions.push("⚠️ **風險評估重點**：");
+          instructions.push(
+            `- 發現 ${stats.highRiskCount} 個高風險專案（延遲>10天）`,
+          );
+          instructions.push("- 分析高風險專案的共同特徵");
+          instructions.push("- 識別潛在的系統性問題");
+          instructions.push("");
+        }
+
+        // 根據地點條件添加特殊指導
+        if (filters.location) {
+          instructions.push("🏭 **地點分析重點**：");
+          instructions.push(`- 專注於 ${filters.location} 地點的專案狀況`);
+          instructions.push("- 評估該地點的資源配置和執行能力");
+          instructions.push("- 識別地點特有的挑戰和解決方案");
+          instructions.push("");
+        }
+
+        // 根據負責人情況添加指導
+        if (stats.uniqueDRICount <= 3) {
+          instructions.push("💼 **負責人分析**：");
+          instructions.push("- 負責人集中度高，檢視工作負荷分配");
+          instructions.push("- 評估是否需要增加人力資源");
+        } else if (stats.uniqueDRICount > 10) {
+          instructions.push("👥 **協調管理**：");
+          instructions.push("- 涉及多位負責人，關注協調和溝通機制");
+          instructions.push("- 建議建立統一的專案追蹤體系");
+        }
+
+        // 根據專案類型添加指導
+        if (filters.typeName) {
+          instructions.push("");
+          instructions.push("📋 **專案類型重點**：");
+          instructions.push(`- 聚焦於 ${filters.typeName} 類型專案的特殊需求`);
+          instructions.push("- 分析該類型專案的典型挑戰");
+        }
+
+        // 簡潔結論
+        instructions.push("分析重點：基於統計數據的風險評估和改善建議");
+
+        return instructions.join("\n");
+      };
+
+      const aiInstructions = generateAIInstructions(
+        stats,
+        filters,
+        result.recordset,
+      );
+
       logger.info("MIL 列表查詢成功", {
         count: result.recordset.length,
         totalRecords: totalRecords,
@@ -243,6 +316,9 @@ class MILService {
             },
           },
         },
+
+        // 🤖 新增：AI 指導提示詞
+        aiInstructions: aiInstructions,
       };
     } catch (error) {
       logger.error("MIL 列表查詢失敗", {
