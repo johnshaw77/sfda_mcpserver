@@ -30,7 +30,7 @@ class DatabaseService {
       if (config.dbConfig?.qms) {
         try {
           console.log("初始化 QMS 資料庫連接池...");
-          logger.info("初始化 QMS 資料庫連接池...", {
+          console.log("初始化 QMS 資料庫連接池...", {
             config: JSON.stringify(config.dbConfig.qms),
           });
 

@@ -53,7 +53,7 @@
 const dbConfig = {
   // 資料庫配置
   qms: {
-    host: process.env.QMS_LOCAL_DB_HOST || "10.8.38.110",
+    host: process.env.QMS_LOCAL_DB_HOST || "localhost",
     port: parseInt(process.env.QMS_LOCAL_DB_PORT) || 3306,
     user: process.env.QMS_LOCAL_DB_USER || "root",
     password: process.env.QMS_LOCAL_DB_PASSWORD || "MyPwd@1234",

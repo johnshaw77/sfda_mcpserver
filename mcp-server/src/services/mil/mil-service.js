@@ -6,6 +6,7 @@
 
 import databaseService from "../database.js";
 import logger from "../../config/logger.js";
+import { GetMILListTool } from "../../tools/mil/get-mil-list.js";
 
 class MILService {
   constructor() {
@@ -19,6 +20,7 @@ class MILService {
    * @param {number} limit - 每頁返回結果數量限制 (預設為 20)
    * @param {string} sort - 排序欄位 (預設為 RecordDate)
    * @param {string} status - MIL 處理狀態 (預設為 "OnGoing"，可選值: "OnGoing", "Closed")
+   * @param {Array} selectedFields - 要返回的欄位列表 (選填，預設返回核心欄位)
    */
   async getMILList(
     filters = {},
@@ -26,6 +28,7 @@ class MILService {
     limit = 20,
     sort = "RecordDate",
     status = "OnGoing",
+    selectedFields = null,
   ) {
     try {
       console.log("getMILList", { status });
@@ -106,21 +109,78 @@ class MILService {
           : "";
 
       console.log("where", whereClause);
+
+      // 🎯 動態欄位選擇邏輯
+      let selectFields;
+      if (selectedFields && selectedFields.length > 0) {
+        // 用戶指定了欄位，進行欄位對應
+        const fieldMapping = {
+          SerialNumber: "SerialNumber",
+          TypeName: "TypeName",
+          MidTypeName: "MidTypeName",
+          DelayDay: "DelayDay",
+          is_APPLY: "is_APPLY",
+          Importance: "Importance",
+          Status: "Status",
+          RecordDate: "FORMAT(RecordDate, 'yyyy-MM-dd') as RecordDate",
+          ProposalFactory: `CASE 
+            WHEN ProposalFactory = 'JK' THEN '郡昆'
+            WHEN ProposalFactory = 'KH' THEN '高雄'
+            WHEN ProposalFactory = 'KS' THEN '昆山'
+            ELSE '-'
+          END AS ProposalFactory`,
+          Proposer_EmpNo: "Proposer_EmpNo",
+          Proposer_Name: "Proposer_Name",
+          Proposer_Dept: "Proposer_Dept",
+          Proposer_Superior_Dept: "Proposer_Superior_Dept",
+          DRI_EmpNo: "DRI_EmpNo",
+          DRI_EmpName: "DRI_EmpName",
+          DRI_Dept: "DRI_Dept",
+          DRI_Superior_Dept: "DRI_Superior_Dept",
+          IssueDiscription: "IssueDiscription",
+          Remark: "Remark",
+          Location: "Location",
+          PlanFinishDate:
+            "FORMAT(PlanFinishDate, 'yyyy-MM-dd') as PlanFinishDate",
+          ChangeFinishDate:
+            "FORMAT(ChangeFinishDate, 'yyyy-MM-dd') as ChangeFinishDate",
+          ActualFinishDate:
+            "FORMAT(ActualFinishDate, 'yyyy-MM-dd') as ActualFinishDate",
+          Solution: "Solution",
+        };
+
+        // 根據用戶選擇的欄位構建SQL
+        const mappedFields = selectedFields
+          .map(field => fieldMapping[field])
+          .filter(field => field); // 過濾無效欄位
+
+        selectFields = mappedFields.join(", ");
+        console.log(`🎯 用戶指定欄位: ${selectedFields.join(", ")}`);
+        console.log(`📝 映射後SQL欄位: ${selectFields}`);
+      } else {
+        selectFields = `SerialNumber,TypeName,
+          Proposer_Name,Proposer_Dept,DelayDay,
+                       CASE 
+                         WHEN ProposalFactory = 'JK' THEN '郡昆'
+                         WHEN ProposalFactory = 'KH' THEN '高雄'
+                         WHEN ProposalFactory = 'KS' THEN '昆山'
+                         ELSE '-'
+                       END AS ProposalFactory,
+                       PlanFinishDate, IssueDiscription,
+                       DRI_EmpName,DRI_Dept,DRI_Superior_Dept
+                       `;
+      }
+
       // 建構主要查詢 SQL (含分頁)
       const offset = (page - 1) * limit;
       const mainQuery = `
-        SELECT SerialNumber, TypeName, MidTypeName, DelayDay, naqi_num, 
-               is_APPLY, Importance, Status, RecordDate, ProposalFactory,
-               Proposer_EmpNo, Proposer_Name, Proposer_Dept, Proposer_Superior_Dept,
-               DRI_EmpNo, DRI_EmpName, DRI_Dept, DRI_Superior_Dept,
-               IssueDiscription, Remark, Location, PlanFinishDate,
-               ChangeFinishDate, ActualFinishDate, Solution
+        SELECT ${selectFields}
         FROM v_mil_kd
         ${whereClause}
         ORDER BY ${sort} DESC
         OFFSET @offset ROWS 
         FETCH NEXT @limit ROWS ONLY
-              `;
+      `;
 
       console.log("mainQuery", mainQuery);
 
@@ -200,78 +260,81 @@ class MILService {
 
       const intelligentSummary = generateSummary(stats, filters);
 
-      // 🤖 新增：動態生成 AI 指導提示詞
-      const generateAIInstructions = (stats, filters, data) => {
-        const instructions = [];
-
-        // 🎯 精簡核心指導 - 只保留最關鍵的規則
-        instructions.push(
-          "**重要：只能基於統計摘要進行分析，不能編造具體專案**",
-        );
-        instructions.push(
-          "- 如果用戶未表明欄位，則至少列出 SerialNumber, TypeName, MidTypeName, is_APPLY, Importance, Status, RecordDate, Proposer_Name, DRI_EmpName, DRI_Dept, DelayDay, IssueDiscription, Location, PlanFinishDate, ActualFinishDate 欄位",
-        );
-        instructions.push("");
+      // 🤖 重構：動態生成 AI 指導提示詞（只保留動態部分）
+      const generateDynamicInstructions = (stats, filters, data) => {
+        const dynamicInstructions = [];
 
         // 根據延遲天數條件調整重點
         if (filters.delayDayMin >= 10) {
-          instructions.push("🚨 **高風險專案重點**：");
-          instructions.push(
+          dynamicInstructions.push("🚨 **高風險專案重點**：");
+          dynamicInstructions.push(
             `- 這些專案延遲≥${filters.delayDayMin}天，屬於高風險狀態`,
           );
-          instructions.push("- 分析延遲原因：資源不足、技術困難、溝通問題等");
-          instructions.push("- 評估 DRI 負責人的工作負荷分配");
-          instructions.push("- 提供立即可執行的風險控制措施");
-          instructions.push("");
+          dynamicInstructions.push(
+            "- 分析延遲原因：資源不足、技術困難、溝通問題等",
+          );
+          dynamicInstructions.push("- 評估 DRI 負責人的工作負荷分配");
+          dynamicInstructions.push("- 提供立即可執行的風險控制措施");
+          dynamicInstructions.push("");
         } else if (stats.highRiskCount > 0) {
-          instructions.push("⚠️ **風險評估重點**：");
-          instructions.push(
+          dynamicInstructions.push("⚠️ **風險評估重點**：");
+          dynamicInstructions.push(
             `- 發現 ${stats.highRiskCount} 個高風險專案（延遲>10天）`,
           );
-          instructions.push("- 分析高風險專案的共同特徵");
-          instructions.push("- 識別潛在的系統性問題");
-          instructions.push("");
+          dynamicInstructions.push("- 分析高風險專案的共同特徵");
+          dynamicInstructions.push("- 識別潛在的系統性問題");
+          dynamicInstructions.push("");
         }
 
         // 根據地點條件添加特殊指導
         if (filters.location) {
-          instructions.push("🏭 **地點分析重點**：");
-          instructions.push(`- 專注於 ${filters.location} 地點的專案狀況`);
-          instructions.push("- 評估該地點的資源配置和執行能力");
-          instructions.push("- 識別地點特有的挑戰和解決方案");
-          instructions.push("");
+          dynamicInstructions.push("🏭 **地點分析重點**：");
+          dynamicInstructions.push(
+            `- 專注於 ${filters.location} 地點的專案狀況`,
+          );
+          dynamicInstructions.push("- 評估該地點的資源配置和執行能力");
+          dynamicInstructions.push("- 識別地點特有的挑戰和解決方案");
+          dynamicInstructions.push("");
         }
 
         // 根據負責人情況添加指導
         if (stats.uniqueDRICount <= 3) {
-          instructions.push("💼 **負責人分析**：");
-          instructions.push("- 負責人集中度高，檢視工作負荷分配");
-          instructions.push("- 評估是否需要增加人力資源");
+          dynamicInstructions.push("💼 **負責人分析**：");
+          dynamicInstructions.push("- 負責人集中度高，檢視工作負荷分配");
+          dynamicInstructions.push("- 評估是否需要增加人力資源");
         } else if (stats.uniqueDRICount > 10) {
-          instructions.push("👥 **協調管理**：");
-          instructions.push("- 涉及多位負責人，關注協調和溝通機制");
-          instructions.push("- 建議建立統一的專案追蹤體系");
+          dynamicInstructions.push("👥 **協調管理**：");
+          dynamicInstructions.push("- 涉及多位負責人，關注協調和溝通機制");
+          dynamicInstructions.push("- 建議建立統一的專案追蹤體系");
         }
 
         // 根據專案類型添加指導
         if (filters.typeName) {
-          instructions.push("");
-          instructions.push("📋 **專案類型重點**：");
-          instructions.push(`- 聚焦於 ${filters.typeName} 類型專案的特殊需求`);
-          instructions.push("- 分析該類型專案的典型挑戰");
+          dynamicInstructions.push("");
+          dynamicInstructions.push("📋 **專案類型重點**：");
+          dynamicInstructions.push(
+            `- 聚焦於 ${filters.typeName} 類型專案的特殊需求`,
+          );
+          dynamicInstructions.push("- 分析該類型專案的典型挑戰");
         }
 
-        // 簡潔結論
-        instructions.push("分析重點：基於統計數據的風險評估和改善建議");
-
-        return instructions.join("\n");
+        return dynamicInstructions.join("\n");
       };
 
-      const aiInstructions = generateAIInstructions(
+      // 🎯 使用混合架構：從 Tool 獲取基礎指導，合併動態指導
+      const milTool = new GetMILListTool();
+      const baseInstructions = milTool.getBaseInstructions();
+
+      const dynamicInstructions = generateDynamicInstructions(
         stats,
         filters,
         result.recordset,
       );
+
+      // 合併基礎指導和動態指導
+      const aiInstructions = dynamicInstructions
+        ? `${baseInstructions}🧠 **動態分析指導**：\n${dynamicInstructions}`
+        : baseInstructions;
 
       logger.info("MIL 列表查詢成功", {
         count: result.recordset.length,
