@@ -158,16 +158,19 @@ class MILService {
         console.log(`🎯 用戶指定欄位: ${selectedFields.join(", ")}`);
         console.log(`📝 映射後SQL欄位: ${selectFields}`);
       } else {
-        selectFields = `SerialNumber,TypeName,
-          Proposer_Name,Proposer_Dept,DelayDay,
+        selectFields = `SerialNumber, TypeName, Status,
+          Proposer_Name, Proposer_Dept, DelayDay,
                        CASE 
                          WHEN ProposalFactory = 'JK' THEN '郡昆'
                          WHEN ProposalFactory = 'KH' THEN '高雄'
                          WHEN ProposalFactory = 'KS' THEN '昆山'
                          ELSE '-'
                        END AS ProposalFactory,
+                       Importance, is_APPLY, MidTypeName,
+                       FORMAT(RecordDate, 'yyyy-MM-dd') as RecordDate,
                        PlanFinishDate, IssueDiscription,
-                       DRI_EmpName,DRI_Dept,DRI_Superior_Dept
+                       DRI_EmpName, DRI_Dept, DRI_Superior_Dept,
+                       Location, Remark
                        `;
       }
 
@@ -182,8 +185,6 @@ class MILService {
         FETCH NEXT @limit ROWS ONLY
       `;
 
-      console.log("mainQuery", mainQuery);
-
       // 建構計數查詢 SQL
       const countQuery = `SELECT COUNT(*) as total FROM v_mil_kd${whereClause}`;
 
@@ -193,6 +194,8 @@ class MILService {
       // 添加分頁參數
       mainRequest.input("offset", offset);
       mainRequest.input("limit", limit);
+
+      console.log("mainQuery", mainQuery);
       const result = await mainRequest.query(mainQuery);
 
       // 執行計數查詢

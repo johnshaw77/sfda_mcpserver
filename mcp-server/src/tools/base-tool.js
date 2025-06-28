@@ -219,6 +219,25 @@ export class BaseTool {
       );
     }
 
+    // 🔧 新增：檢查未知參數，防止 AI 幻覺
+    if (this.inputSchema.properties) {
+      const allowedParams = Object.keys(this.inputSchema.properties);
+      const providedParams = Object.keys(params);
+      const unknownParams = providedParams.filter(param => !allowedParams.includes(param));
+      
+      if (unknownParams.length > 0) {
+        throw new ToolExecutionError(
+          `Unknown parameter(s): ${unknownParams.join(', ')}. Allowed parameters: ${allowedParams.join(', ')}`,
+          ToolErrorType.VALIDATION_ERROR,
+          { 
+            unknownParameters: unknownParams,
+            allowedParameters: allowedParams,
+            providedParameters: providedParams
+          },
+        );
+      }
+    }
+
     // 檢查必要參數
     if (this.inputSchema.required) {
       for (const requiredField of this.inputSchema.required) {
