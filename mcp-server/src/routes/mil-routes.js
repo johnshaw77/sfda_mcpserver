@@ -6,6 +6,124 @@ import express from "express";
 import { getToolManager, getModuleMetadata } from "../tools/index.js";
 import logger from "../config/logger.js";
 
+/**
+ * 將工具結果分塊串流輸出
+ * @param {Response} res - Express 回應物件
+ * @param {any} result - 工具執行結果
+ * @param {string} toolName - 工具名稱
+ */
+async function streamToolResult(res, result, toolName) {
+  try {
+    // 將結果轉換為 markdown 格式的文字
+    const content = formatResultAsMarkdown(result, toolName);
+    
+    // 分塊策略：每個chunk大小在15-30字符之間
+    const chunks = splitIntoChunks(content, 15, 30);
+    
+    logger.info(`開始串流 ${toolName} 結果，共 ${chunks.length} 個塊`);
+    
+    // 逐塊發送
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      
+      res.write(`data: ${JSON.stringify({
+        content: chunk,
+        index: i,
+        total: chunks.length,
+        toolName,
+        timestamp: new Date().toISOString()
+      })}\n\n`);
+      
+      // 隨機延遲 30-80ms，模擬真實的AI回應速度
+      const delay = 30 + Math.random() * 50;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    // 發送完成信號
+    res.write('data: [DONE]\n\n');
+    res.end();
+    
+    logger.info(`${toolName} 串流輸出完成`);
+    
+  } catch (error) {
+    logger.error(`串流輸出失敗:`, error);
+    res.write(`data: ${JSON.stringify({
+      error: true,
+      message: "串流輸出失敗",
+      details: error.message
+    })}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
+  }
+}
+
+/**
+ * 將內容分割成隨機大小的塊
+ * @param {string} content - 要分割的內容
+ * @param {number} minSize - 最小塊大小
+ * @param {number} maxSize - 最大塊大小
+ * @returns {string[]} 分割後的塊陣列
+ */
+function splitIntoChunks(content, minSize, maxSize) {
+  const chunks = [];
+  let currentIndex = 0;
+  
+  while (currentIndex < content.length) {
+    // 隨機塊大小
+    const chunkSize = Math.floor(Math.random() * (maxSize - minSize + 1)) + minSize;
+    const chunk = content.substring(currentIndex, currentIndex + chunkSize);
+    chunks.push(chunk);
+    currentIndex += chunkSize;
+  }
+  
+  return chunks;
+}
+
+/**
+ * 將工具結果格式化為 Markdown
+ * @param {any} result - 工具結果
+ * @param {string} toolName - 工具名稱
+ * @returns {string} 格式化後的 Markdown 文字
+ */
+function formatResultAsMarkdown(result, toolName) {
+  // 基於工具類型生成不同的格式
+  let content = '';
+  
+  try {
+    if (typeof result === 'string') {
+      content = result;
+    } else if (result && typeof result === 'object') {
+      // 將 JSON 結果轉換為易讀的 markdown 格式
+      content = `## ${getToolDisplayName(toolName)} 查詢結果\n\n`;
+      content += JSON.stringify(result, null, 2);
+    } else {
+      content = `查詢完成，但沒有返回具體結果。`;
+    }
+  } catch (error) {
+    logger.error('格式化結果失敗:', error);
+    content = '結果格式化失敗，請稍後重試。';
+  }
+  
+  return content;
+}
+
+/**
+ * 獲取工具的顯示名稱
+ * @param {string} toolName - 工具名稱
+ * @returns {string} 顯示名稱
+ */
+function getToolDisplayName(toolName) {
+  const displayNames = {
+    'get-mil-list': 'MIL 列表',
+    'get-mil-details': 'MIL 詳細資訊',
+    'get-status-report': 'MIL 狀態報告',
+    'get-mil-type-list': 'MIL 類型列表',
+    'get-count-by': 'MIL 統計分析'
+  };
+  
+  return displayNames[toolName] || toolName;
+}
+
 // 創建模組路由
 const router = express.Router();
 
@@ -27,10 +145,13 @@ router.get("/tools", (req, res) => {
   });
 });
 
-// 工具調用端點
+// 工具調用端點 - SSE 串流版本
 router.post("/:toolName", async (req, res) => {
   const { toolName } = req.params;
   const params = req.body;
+  
+  // 檢查是否要求SSE輸出
+  const useSSE = req.headers['accept'] === 'text/event-stream';
 
   try {
     // 檢查工具是否存在
@@ -43,6 +164,23 @@ router.post("/:toolName", async (req, res) => {
     ];
 
     if (!validTools.includes(toolName)) {
+      if (useSSE) {
+        // SSE 錯誤回應
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.write(`data: ${JSON.stringify({
+          error: true,
+          message: `找不到工具 ${toolName}`,
+          availableTools: validTools
+        })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      }
+      
       return res.status(404).json({
         success: false,
         error: {
@@ -52,36 +190,66 @@ router.post("/:toolName", async (req, res) => {
       });
     }
 
-    const result = await toolManager.callTool(toolName, params);
+    if (useSSE) {
+      // SSE 模式
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      });
 
-    // 添加調試日誌
-    logger.info(`MIL 工具調用結果:`, {
-      toolName,
-      resultKeys: Object.keys(result || {}),
-      success: result?.success,
-      hasResult: !!result?.result,
-      resultType: typeof result?.result,
-    });
-
-    // 檢查工具執行是否成功
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        error: {
+      // 執行工具
+      const result = await toolManager.callTool(toolName, params);
+      
+      // 檢查工具執行是否成功
+      if (!result.success) {
+        res.write(`data: ${JSON.stringify({
+          error: true,
           code: "TOOL_EXECUTION_FAILED",
           message: result.error?.message || "工具執行失敗",
           details: result.error?.details,
-        },
+        })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      }
+
+      // 將結果分塊串流輸出
+      await streamToolResult(res, result.result, toolName);
+      
+    } else {
+      // 傳統 JSON 模式
+      const result = await toolManager.callTool(toolName, params);
+
+      // 添加調試日誌
+      logger.info(`MIL 工具調用結果:`, {
+        toolName,
+        resultKeys: Object.keys(result || {}),
+        success: result?.success,
+        hasResult: !!result?.result,
+        resultType: typeof result?.result,
+      });
+
+      // 檢查工具執行是否成功
+      if (!result.success) {
+        return res.status(500).json({
+          success: false,
+          error: {
+            code: "TOOL_EXECUTION_FAILED",
+            message: result.error?.message || "工具執行失敗",
+            details: result.error?.details,
+          },
+        });
+      }
+
+      res.json({
+        success: true,
+        module: "mil",
+        toolName: toolName,
+        result: result.result,
+        timestamp: new Date().toISOString(),
       });
     }
-
-    res.json({
-      success: true,
-      module: "mil",
-      toolName: toolName,
-      result: result.result,
-      timestamp: new Date().toISOString(),
-    });
   } catch (error) {
     logger.error(`MIL 工具 ${toolName} 調用失敗:`, {
       error: error.message,

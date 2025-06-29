@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP 工具 SSE 流式測試</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .test-controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .streaming-indicator {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin: 10px 0;
+            color: #007bff;
+        }
+        
+        .streaming-indicator.active {
+            display: flex;
+        }
+        
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: #007bff;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 0.3;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #e9ecef;
+            border-radius: 2px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #007bff;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .result-container {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 15px;
+            min-height: 100px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+        
+        .log {
+            background: #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #6c757d;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.streaming {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 MCP 工具 SSE 流式測試</h1>
+        <p>測試 MIL 工具的 Server-Sent Events 流式響應功能</p>
+        
+        <div class="test-controls">
+            <button id="testBtn">開始 SSE 流式測試</button>
+            <button id="stopBtn" disabled>停止測試</button>
+            <span id="status" class="status"></span>
+        </div>
+        
+        <div class="streaming-indicator" id="streamingIndicator">
+            <div class="dot"></div>
+            <span>正在接收數據流...</span>
+            <span id="progressText">0 / 0</span>
+        </div>
+        
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
+        <div class="result-container" id="resultContainer">
+            等待開始測試...
+        </div>
+        
+        <div class="log" id="logContainer">
+            <strong>事件日誌：</strong><br>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let streamContent = '';
+        let isStreaming = false;
+        
+        const testBtn = document.getElementById('testBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const status = document.getElementById('status');
+        const streamingIndicator = document.getElementById('streamingIndicator');
+        const progressText = document.getElementById('progressText');
+        const progressFill = document.getElementById('progressFill');
+        const resultContainer = document.getElementById('resultContainer');
+        const logContainer = document.getElementById('logContainer');
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logContainer.innerHTML += `[${timestamp}] ${message}<br>`;
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function updateStatus(text, type) {
+            status.textContent = text;
+            status.className = `status ${type}`;
+        }
+        
+        function updateProgress(current, total) {
+            if (total > 0) {
+                const percentage = Math.round((current / total) * 100);
+                progressFill.style.width = `${percentage}%`;
+                progressText.textContent = `${current} / ${total}`;
+            }
+        }
+        
+        async function startSSETest() {
+            if (isStreaming) return;
+            
+            isStreaming = true;
+            streamContent = '';
+            testBtn.disabled = true;
+            stopBtn.disabled = false;
+            streamingIndicator.classList.add('active');
+            updateStatus('連接中...', 'streaming');
+            resultContainer.textContent = '';
+            
+            log('開始 SSE 流式測試');
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/mil/get-mil-list', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream',
+                        'Cache-Control': 'no-cache',
+                        'Connection': 'keep-alive',
+                    },
+                    body: JSON.stringify({
+                        page: 1,
+                        limit: 3
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                updateStatus('流式接收中', 'streaming');
+                log('SSE 連接建立成功');
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) {
+                        log('SSE 流讀取完成');
+                        break;
+                    }
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const jsonStr = line.slice(6).trim();
+                            
+                            if (jsonStr === '[DONE]') {
+                                log('收到完成信號');
+                                break;
+                            }
+                            
+                            try {
+                                const data = JSON.parse(jsonStr);
+                                
+                                if (data.error) {
+                                    log(`❌ 錯誤: ${data.message}`);
+                                    updateStatus('錯誤', 'error');
+                                    resultContainer.textContent = `錯誤: ${data.message}`;
+                                } else {
+                                    // 正常的數據塊
+                                    streamContent += data.content;
+                                    resultContainer.textContent = streamContent;
+                                    
+                                    updateProgress(data.index + 1, data.total);
+                                    log(`📦 收到數據塊 ${data.index + 1}/${data.total} (${data.content.length} 字符)`);
+                                }
+                            } catch (parseError) {
+                                log(`⚠️ 解析錯誤: ${parseError.message}`);
+                            }
+                        }
+                    }
+                }
+                
+                updateStatus('完成', 'success');
+                log('✅ SSE 流式測試完成');
+                
+            } catch (error) {
+                log(`❌ 測試失敗: ${error.message}`);
+                updateStatus('失敗', 'error');
+                resultContainer.textContent = `錯誤: ${error.message}`;
+            } finally {
+                isStreaming = false;
+                testBtn.disabled = false;
+                stopBtn.disabled = true;
+                streamingIndicator.classList.remove('active');
+            }
+        }
+        
+        function stopTest() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            isStreaming = false;
+            testBtn.disabled = false;
+            stopBtn.disabled = true;
+            streamingIndicator.classList.remove('active');
+            updateStatus('已停止', 'error');
+            log('⏹️ 測試已停止');
+        }
+        
+        testBtn.addEventListener('click', startSSETest);
+        stopBtn.addEventListener('click', stopTest);
+        
+        log('🚀 SSE 測試頁面已準備就緒');
+    </script>
+</body>
+</html>
