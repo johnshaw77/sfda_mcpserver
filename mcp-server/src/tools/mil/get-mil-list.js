@@ -19,56 +19,25 @@ export class GetMILListTool extends BaseTool {
   getBaseInstructions() {
     const instructions = [];
 
-    // 🎯 核心原則
-    instructions.push("🎯 **基礎指導原則**：");
-    instructions.push("- 基於真實資料進行分析，專注於數據驅動的洞察");
-    instructions.push("- 如果資料缺失，明確標註「資料未提供」");
-    instructions.push("- 提供具體可行的改善建議");
+    // 🎯 精簡核心原則
+    instructions.push("🎯 **基礎原則**：基於實際數據分析，不編造信息");
     instructions.push("");
 
-    // 🗂️ 核心欄位含義說明（預設必定返回的欄位）
-    instructions.push("🗂️ **核心欄位含義說明**：");
-    instructions.push("- SerialNumber: MIL序號，格式如 G250619001");
-    instructions.push(
-      "- ProposalFactory: 提案廠別 (JK=郡昆, KH=高雄, KS=昆山)",
-    );
-    instructions.push("- DRI_EmpName: 負責人員姓名");
+    // 🗂️ 核心欄位（只說明最重要的）
+    instructions.push("🗂️ **核心欄位**：");
+    instructions.push("- SerialNumber: MIL序號");
+    instructions.push("- DelayDay: 延遲天數（正數=延遲，負數=提前）");
+    instructions.push("- Proposal_Name: 提案人");
+    instructions.push("- IssueDiscription: 問題描述內容");
+    instructions.push("- DRI_EmpName: 負責人");
     instructions.push("");
 
-    // 🗂️ 擴展欄位含義說明（僅當Tool實際指定並返回時才使用）
-    instructions.push("🗂️ **擴展欄位含義說明**（僅當實際返回時使用）：");
-    instructions.push("- Solution: 解決方案內容");
-    instructions.push("- TypeName: MIL類別 (如廠內Issue、品質ISSUE管理等)");
-    instructions.push("- is_APPLY: 申請狀態 (Y=已申請, N=未申請)");
-    instructions.push("- DelayDay: 延遲天數 (負數=提前, 正數=延遲, 0=準時)");
-    instructions.push("- IssueDiscription: 問題描述詳細內容");
-    instructions.push("- PlanFinishDate: 計劃完成日期");
-    instructions.push("- ActualFinishDate: 實際完成日期");
-    instructions.push("- 所有日期欄位請顯示為 YYYY-MM-DD 格式");
-    instructions.push("");
-
-    // ⚠️ 重要限制（確保AI遵循實際資料）
-    instructions.push("⚠️ **重要分析原則**：");
-    instructions.push("- **僅分析工具實際返回的欄位資料**");
-    instructions.push("- **不要添加工具未返回的欄位，即使在擴展說明中有提到**");
-    instructions.push("- **如果某個欄位沒有在資料中，就不要提及或分析該欄位**");
-    instructions.push("");
-
-    // 🎨 格式化要求（Tool層負責格式指導）
-    instructions.push("🎨 **格式化要求**：");
-    instructions.push("- 使用清晰的層次結構組織分析內容");
-    instructions.push("- 關鍵數據使用 📊 等 emoji 標示");
-    instructions.push("- 風險項目使用 🚨 等警示標記");
-    instructions.push("- 將代碼型欄位轉換為中文說明 (如 Y→是, N→否)");
-    instructions.push("- 提供具體的改善建議和行動方案");
-    instructions.push("");
-
-    // 🧠 分析重點（Tool層負責分析指導）
+    // 🧠 分析重點（簡化版）
     instructions.push("🧠 **分析重點**：");
     instructions.push("- 識別高風險專案（延遲天數>10）");
-    instructions.push("- 分析延遲原因和模式");
-    instructions.push("- 評估負責人工作負荷分配");
-    instructions.push("- 提供優先處理順序建議");
+    instructions.push("- 識別 CEO, COO 關注的專案");
+    instructions.push("- 評估負責人工作負荷");
+    instructions.push("- 提供改善建議");
     instructions.push("");
 
     return instructions.join("\n");

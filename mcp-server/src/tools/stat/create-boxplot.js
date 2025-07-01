@@ -57,7 +57,11 @@ export class CreateBoxplotTool extends BaseTool {
               comparison_type: {
                 type: "string",
                 description: "比較類型",
-                examples: ["treatment_groups", "teaching_methods", "product_batches"],
+                examples: [
+                  "treatment_groups",
+                  "teaching_methods",
+                  "product_batches",
+                ],
               },
               variable_name: {
                 type: "string",
@@ -87,7 +91,10 @@ export class CreateBoxplotTool extends BaseTool {
     try {
       logger.info("收到盒鬚圖創建請求", {
         groupCount: args.groups?.length,
-        totalDataPoints: args.groups?.reduce((sum, group) => sum + group.length, 0),
+        totalDataPoints: args.groups?.reduce(
+          (sum, group) => sum + group.length,
+          0,
+        ),
         title: args.title,
         scenario: args.context?.scenario,
       });
@@ -115,11 +122,14 @@ export class CreateBoxplotTool extends BaseTool {
           chart_type: "boxplot",
           group_statistics: this.generateGroupStatistics(args.groups),
           comparison_analysis: this.generateComparisonAnalysis(args.groups),
-          image_data: args.generate_image && boxplotResult.has_image ? {
-            base64: boxplotResult.image_base64,
-            format: boxplotResult.image_format,
-            size: boxplotResult.image_base64?.length || 0
-          } : null,
+          image_data:
+            args.generate_image && boxplotResult.has_image
+              ? {
+                  base64: boxplotResult.image_base64,
+                  format: boxplotResult.image_format,
+                  size: boxplotResult.image_base64?.length || 0,
+                }
+              : null,
         },
       };
     } catch (error) {
@@ -156,7 +166,7 @@ export class CreateBoxplotTool extends BaseTool {
     // 驗證每組數據
     for (let i = 0; i < args.groups.length; i++) {
       const group = args.groups[i];
-      
+
       if (!Array.isArray(group) || group.length < 3) {
         throw new ToolExecutionError(
           ToolErrorType.INVALID_INPUT,
@@ -185,14 +195,15 @@ export class CreateBoxplotTool extends BaseTool {
   }
 
   /**
-   * 通過 API 創建盒鬚圖
+   * 通過 API 創建盒鬚圖 //TODO: 這不是應該放在 service 嗎？
    */
   async createBoxplotViaAPI(args) {
     try {
       // 構建請求數據
       const requestData = {
         groups: args.groups,
-        group_labels: args.group_labels || args.groups.map((_, i) => `組別 ${i + 1}`),
+        group_labels:
+          args.group_labels || args.groups.map((_, i) => `組別 ${i + 1}`),
         title: args.title,
         y_axis_label: args.y_axis_label || "數值",
         generate_image: args.generate_image || false,
@@ -234,73 +245,12 @@ export class CreateBoxplotTool extends BaseTool {
   }
 
   /**
-   * 生成盒鬚圖回應內容
+   * 生成簡化的盒鬚圖回應內容
+   * 詳細分析由 StatisticalFormatter 處理
    */
   generateBoxplotResponse(boxplotResult, args) {
-    let response = "";
-
-    // 標題
-    response += `# 📦 盒鬚圖創建成功\n\n`;
-
-    if (args.title) {
-      response += `**圖表標題**: ${args.title}\n\n`;
-    }
-
-    // 數據概覽
-    response += "## 📈 數據概覽\n\n";
-    response += `- **圖表類型**: 盒鬚圖\n`;
-    response += `- **組數**: ${args.groups.length}\n`;
-    
-    const groupLabels = args.group_labels || args.groups.map((_, i) => `組別 ${i + 1}`);
-    response += `- **組別**: ${groupLabels.join(", ")}\n`;
-    
-    const totalDataPoints = args.groups.reduce((sum, group) => sum + group.length, 0);
-    response += `- **總數據點**: ${totalDataPoints}\n`;
-    response += `- **各組樣本數**: ${args.groups.map(g => g.length).join(", ")}\n\n`;
-
-    // 組間比較分析
-    response += "## 📊 組間比較分析\n\n";
-    response += this.generateGroupComparison(args.groups, groupLabels);
-
-    // 異常值檢測
-    response += "## 🔍 異常值檢測\n\n";
-    response += this.generateOutlierAnalysis(args.groups, groupLabels);
-
-    // 分佈特徵比較
-    response += "## 📋 分佈特徵比較\n\n";
-    response += this.generateDistributionComparison(args.groups, groupLabels);
-
-    // 場景化解釋
-    if (args.context?.scenario) {
-      response += "## 🎭 場景分析\n\n";
-      response += this.generateContextualInterpretation(
-        args.groups,
-        groupLabels,
-        args.context.scenario,
-        args.context.comparison_type,
-        args.context.variable_name,
-      );
-    }
-
-    // 統計檢定建議
-    response += "## 💡 統計檢定建議\n\n";
-    response += this.generateStatisticalTestRecommendations(args.groups);
-
-    // 成功信息
-    response += "## ✅ 創建狀態\n\n";
-    response += `盒鬚圖已成功創建！${boxplotResult.reasoning}\n\n`;
-    
-    // 圖片資訊
-    if (args.generate_image && boxplotResult.has_image) {
-      response += "## 🖼️ 圖片資訊\n\n";
-      response += `- **圖片格式**: ${boxplotResult.image_format.toUpperCase()}\n`;
-      response += `- **Base64 編碼**: 已生成（${boxplotResult.image_base64?.length || 0} 字符）\n`;
-      response += `- **圖片狀態**: 可直接在前端顯示或儲存為檔案\n\n`;
-    }
-    
-    response += "💡 **盒鬚圖說明**: 適合比較多組數據的分佈、檢測異常值，是組間比較分析的最佳視覺化工具\n";
-
-    return response;
+    // 🔧 簡化回應，避免與 StatisticalFormatter 重複
+    return `盒鬚圖創建成功：${boxplotResult.reasoning || '已完成圖表生成'}`;
   }
 
   /**
@@ -311,7 +261,8 @@ export class CreateBoxplotTool extends BaseTool {
       const sorted = [...group].sort((a, b) => a - b);
       const n = group.length;
       const mean = group.reduce((sum, val) => sum + val, 0) / n;
-      const variance = group.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (n - 1);
+      const variance =
+        group.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (n - 1);
       const std = Math.sqrt(variance);
 
       return {
@@ -324,7 +275,9 @@ export class CreateBoxplotTool extends BaseTool {
         max: Math.max(...group),
         mean: mean,
         std: std,
-        iqr: this.calculatePercentile(sorted, 75) - this.calculatePercentile(sorted, 25),
+        iqr:
+          this.calculatePercentile(sorted, 75) -
+          this.calculatePercentile(sorted, 25),
       };
     });
   }
@@ -367,7 +320,11 @@ export class CreateBoxplotTool extends BaseTool {
     // 中位數比較
     comparison += "**中位數比較**:\n";
     const medianRanking = stats
-      .map((stat, i) => ({ index: i, median: stat.median, label: groupLabels[i] }))
+      .map((stat, i) => ({
+        index: i,
+        median: stat.median,
+        label: groupLabels[i],
+      }))
       .sort((a, b) => b.median - a.median);
 
     medianRanking.forEach((item, rank) => {
@@ -380,7 +337,7 @@ export class CreateBoxplotTool extends BaseTool {
       .sort((a, b) => a.iqr - b.iqr);
 
     iqrRanking.forEach((item, rank) => {
-      comparison += `${rank + 1}. ${item.label}: IQR = ${item.iqr.toFixed(2)} (變異性${rank === 0 ? '最小' : rank === iqrRanking.length - 1 ? '最大' : '中等'})\n`;
+      comparison += `${rank + 1}. ${item.label}: IQR = ${item.iqr.toFixed(2)} (變異性${rank === 0 ? "最小" : rank === iqrRanking.length - 1 ? "最大" : "中等"})\n`;
     });
 
     comparison += "\n";
@@ -402,7 +359,9 @@ export class CreateBoxplotTool extends BaseTool {
       const lowerFence = q1 - 1.5 * iqr;
       const upperFence = q3 + 1.5 * iqr;
 
-      const outliers = group.filter(val => val < lowerFence || val > upperFence);
+      const outliers = group.filter(
+        val => val < lowerFence || val > upperFence,
+      );
 
       if (outliers.length > 0) {
         hasOutliers = true;
@@ -461,16 +420,16 @@ export class CreateBoxplotTool extends BaseTool {
    */
   generateComparisonAnalysis(groups) {
     const stats = this.generateGroupStatistics(groups);
-    
+
     // 判斷組間是否有明顯差異
     const medians = stats.map(s => s.median);
     const maxMedian = Math.max(...medians);
     const minMedian = Math.min(...medians);
     const medianRange = maxMedian - minMedian;
-    
+
     // 計算平均 IQR 作為變異性參考
     const avgIQR = stats.reduce((sum, s) => sum + s.iqr, 0) / stats.length;
-    
+
     return {
       median_range: medianRange,
       avg_iqr: avgIQR,
@@ -483,7 +442,13 @@ export class CreateBoxplotTool extends BaseTool {
   /**
    * 生成情境化解釋
    */
-  generateContextualInterpretation(groups, groupLabels, scenario, comparisonType, variableName = "測量值") {
+  generateContextualInterpretation(
+    groups,
+    groupLabels,
+    scenario,
+    comparisonType,
+    variableName = "測量值",
+  ) {
     let interpretation = "";
     const compAnalysis = this.generateComparisonAnalysis(groups);
 
