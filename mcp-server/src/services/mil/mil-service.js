@@ -32,74 +32,90 @@ class MILService {
   ) {
     try {
       console.log("getMILList", { status });
-      // 構建 WHERE 條件
+      // 構建 WHERE 條件和參數 (MySQL 語法)
       const whereConditions = [];
+      const queryParams = [];
 
       // 添加 status 參數處理
       if (status) {
-        whereConditions.push("Status = @status");
+        whereConditions.push("Status = ?");
+        queryParams.push(status);
       }
 
       // MIL Typename
       if (filters.typeName) {
-        whereConditions.push("TypeName=@typeName");
+        whereConditions.push("TypeName = ?");
+        queryParams.push(filters.typeName);
       }
       // MIL 處理狀態篩選 (保留原有的 filters.status 支持)
       if (filters.status) {
-        whereConditions.push("Status = @filterStatus");
+        whereConditions.push("Status = ?");
+        queryParams.push(filters.status);
       }
 
       // 提案廠別篩選
       if (filters.proposalFactory) {
-        whereConditions.push("ProposalFactory = @proposalFactory");
+        whereConditions.push("ProposalFactory = ?");
+        queryParams.push(filters.proposalFactory);
       }
 
       // 提出人姓名模糊查詢
       if (filters.proposerName) {
-        whereConditions.push("Proposer_Name LIKE @proposerName");
+        whereConditions.push("Proposer_Name LIKE ?");
+        queryParams.push(`%${filters.proposerName}%`);
       }
 
       // MIL 編號模糊查詢
       if (filters.serialNumber) {
-        whereConditions.push("SerialNumber LIKE @serialNumber");
+        whereConditions.push("SerialNumber LIKE ?");
+        queryParams.push(`%${filters.serialNumber}%`);
       }
 
       // 重要度篩選
       if (filters.importance) {
-        whereConditions.push("Importance = @importance");
+        whereConditions.push("Importance = ?");
+        queryParams.push(filters.importance);
       }
 
       // 延遲天數範圍篩選
       if (filters.delayDayMin !== undefined) {
-        whereConditions.push("DelayDay >= @delayDayMin");
+        whereConditions.push("DelayDay >= ?");
+        queryParams.push(filters.delayDayMin);
       }
       if (filters.delayDayMax !== undefined) {
-        whereConditions.push("DelayDay <= @delayDayMax");
+        whereConditions.push("DelayDay <= ?");
+        queryParams.push(filters.delayDayMax);
       }
       // 向後兼容舊的 delayDay 參數
       if (filters.delayDay !== undefined) {
-        whereConditions.push("DelayDay >= @delayDay");
+        whereConditions.push("DelayDay >= ?");
+        queryParams.push(filters.delayDay);
       }
 
       // 負責人相關篩選
       if (filters.driName) {
-        whereConditions.push("DRI_EmpName LIKE @driName");
+        whereConditions.push("DRI_EmpName LIKE ?");
+        queryParams.push(`%${filters.driName}%`);
       }
       if (filters.driEmpNo) {
-        whereConditions.push("DRI_EmpNo = @driEmpNo");
+        whereConditions.push("DRI_EmpNo = ?");
+        queryParams.push(filters.driEmpNo);
       }
       if (filters.driDept) {
-        whereConditions.push("DRI_Dept = @driDept");
+        whereConditions.push("DRI_Dept = ?");
+        queryParams.push(filters.driDept);
       }
 
       // 地點相關篩選
       if (filters.location) {
-        whereConditions.push("Location LIKE @location");
+        whereConditions.push("Location LIKE ?");
+        queryParams.push(`%${filters.location}%`);
       }
 
       // 申請結案狀態篩選
       if (filters.isApply) {
-        whereConditions.push("is_APPLY = @isApply");
+        whereConditions.push("is_APPLY = ?");
+        queryParams.push(filters.isApply);
       }
 
       // 建構 WHERE 子句
@@ -122,7 +138,7 @@ class MILService {
           is_APPLY: "is_APPLY",
           Importance: "Importance",
           Status: "Status",
-          RecordDate: "FORMAT(RecordDate, 'yyyy-MM-dd') as RecordDate",
+          RecordDate: "DATE_FORMAT(RecordDate, '%Y-%m-%d') as RecordDate",
           ProposalFactory: `CASE 
             WHEN ProposalFactory = 'JK' THEN '郡昆'
             WHEN ProposalFactory = 'KH' THEN '高雄'
@@ -141,11 +157,11 @@ class MILService {
           Remark: "Remark",
           Location: "Location",
           PlanFinishDate:
-            "FORMAT(PlanFinishDate, 'yyyy-MM-dd') as PlanFinishDate",
+            "DATE_FORMAT(PlanFinishDate, '%Y-%m-%d') as PlanFinishDate",
           ChangeFinishDate:
-            "FORMAT(ChangeFinishDate, 'yyyy-MM-dd') as ChangeFinishDate",
+            "DATE_FORMAT(ChangeFinishDate, '%Y-%m-%d') as ChangeFinishDate",
           ActualFinishDate:
-            "FORMAT(ActualFinishDate, 'yyyy-MM-dd') as ActualFinishDate",
+            "DATE_FORMAT(ActualFinishDate, '%Y-%m-%d') as ActualFinishDate",
           Solution: "Solution",
         };
 
@@ -167,50 +183,51 @@ class MILService {
                          ELSE '-'
                        END AS ProposalFactory,
                        Importance, is_APPLY, MidTypeName,
-                       FORMAT(RecordDate, 'yyyy-MM-dd') as RecordDate,
+                       DATE_FORMAT(RecordDate, '%Y-%m-%d') as RecordDate,
                        PlanFinishDate, IssueDiscription,
                        DRI_EmpName, DRI_Dept, DRI_Superior_Dept,
                        Location, Remark
                        `;
       }
 
-      // 建構主要查詢 SQL (含分頁)
+      // 建構主要查詢 SQL (含分頁) - MySQL 語法
       const offset = (page - 1) * limit;
       const mainQuery = `
         SELECT ${selectFields}
         FROM v_mil_kd
         ${whereClause}
         ORDER BY ${sort} DESC
-        OFFSET @offset ROWS 
-        FETCH NEXT @limit ROWS ONLY
+        LIMIT ${limit} OFFSET ${offset}
       `;
 
       // 建構計數查詢 SQL
       const countQuery = `SELECT COUNT(*) as total FROM v_mil_kd${whereClause}`;
 
-      // 執行主要查詢
-      const mainRequest = databaseService.getPool(this.dbName).request();
-      this.setQueryParameters(mainRequest, filters, status);
-      // 添加分頁參數
-      mainRequest.input("offset", offset);
-      mainRequest.input("limit", limit);
-
       console.log("mainQuery", mainQuery);
-      const result = await mainRequest.query(mainQuery);
+      console.log("queryParams", queryParams);
 
-      // 執行計數查詢
-      const countRequest = databaseService.getPool(this.dbName).request();
-      this.setQueryParameters(countRequest, filters, status);
-      const countResult = await countRequest.query(countQuery);
+      // 執行主要查詢 - MySQL 方式（不包含 limit/offset 參數）
+      const result = await databaseService.query(
+        this.dbName,
+        mainQuery,
+        queryParams,
+      );
 
-      const totalRecords = countResult.recordset[0].total;
+      // 執行計數查詢 - MySQL 方式
+      const countResult = await databaseService.query(
+        this.dbName,
+        countQuery,
+        queryParams,
+      );
+
+      const totalRecords = countResult[0].total;
       const totalPages = Math.ceil(totalRecords / limit);
 
-      // 📊 添加統計摘要查詢（基於相同的篩選條件）
+      // 📊 添加統計摘要查詢（基於相同的篩選條件）- MySQL 語法
       const statsQuery = `
         SELECT 
           COUNT(*) as totalCount,
-          AVG(CAST(DelayDay as FLOAT)) as avgDelayDays,
+          AVG(DelayDay) as avgDelayDays,
           MIN(DelayDay) as minDelayDays,
           MAX(DelayDay) as maxDelayDays,
           SUM(CASE WHEN DelayDay > 10 THEN 1 ELSE 0 END) as highRiskCount,
@@ -222,10 +239,13 @@ class MILService {
         ${whereClause}
       `;
 
-      const statsRequest = databaseService.getPool(this.dbName).request();
-      this.setQueryParameters(statsRequest, filters, status);
-      const statsResult = await statsRequest.query(statsQuery);
-      const stats = statsResult.recordset[0];
+      // 執行統計查詢 - MySQL 方式
+      const statsResult = await databaseService.query(
+        this.dbName,
+        statsQuery,
+        queryParams,
+      );
+      const stats = statsResult[0];
 
       // 🎯 生成智能摘要文字（根據數據動態生成）
       const generateSummary = (stats, filters) => {
@@ -309,7 +329,7 @@ class MILService {
       const dynamicInstructions = generateDynamicInstructions(
         stats,
         filters,
-        result.recordset,
+        result,
       );
 
       // 合併基礎指導和動態指導
@@ -318,7 +338,7 @@ class MILService {
         : baseInstructions;
 
       logger.info("MIL 列表查詢成功", {
-        count: result.recordset.length,
+        count: result.length,
         totalRecords: totalRecords,
         page: page,
         totalPages: totalPages,
@@ -329,7 +349,7 @@ class MILService {
 
       return {
         success: true,
-        count: result.recordset.length,
+        count: result.length,
         totalRecords: totalRecords,
         currentPage: page,
         totalPages: totalPages,
@@ -337,7 +357,7 @@ class MILService {
         status: status,
         timestamp: new Date().toISOString(),
         filters: filters,
-        data: result.recordset,
+        data: result,
 
         // 📊 新增：統計摘要資訊
         statistics: {
@@ -374,75 +394,15 @@ class MILService {
   }
 
   /**
-   * 設定查詢參數的輔助方法
-   * @param {Object} request - MSSQL request 物件
-   * @param {Object} filters - 篩選條件
-   * @param {string} status - MIL 處理狀態
+   * 設定查詢參數的輔助方法 (已停用 - MySQL 現在使用參數數組)
+   * 保留此方法作為 MSSQL 備份參考
    */
+  /*
   setQueryParameters(request, filters, status) {
-    // 添加 status 參數
-    if (status) {
-      request.input("status", status);
-    }
-
-    if (filters.typeName) {
-      request.input("typeName", filters.typeName);
-    }
-
-    // 保留原有的 filters.status 支持，使用不同的參數名避免衝突
-    if (filters.status) {
-      request.input("filterStatus", filters.status);
-    }
-
-    if (filters.proposalFactory) {
-      request.input("proposalFactory", filters.proposalFactory);
-    }
-
-    if (filters.proposerName) {
-      request.input("proposerName", "%" + filters.proposerName + "%");
-    }
-
-    if (filters.serialNumber) {
-      request.input("serialNumber", "%" + filters.serialNumber + "%");
-    }
-
-    if (filters.importance) {
-      request.input("importance", filters.importance);
-    }
-
-    // 延遲天數範圍參數
-    if (filters.delayDayMin !== undefined) {
-      request.input("delayDayMin", filters.delayDayMin);
-    }
-    if (filters.delayDayMax !== undefined) {
-      request.input("delayDayMax", filters.delayDayMax);
-    }
-    // 向後兼容
-    if (filters.delayDay !== undefined) {
-      request.input("delayDay", filters.delayDay);
-    }
-
-    // 負責人相關參數
-    if (filters.driName) {
-      request.input("driName", "%" + filters.driName + "%");
-    }
-    if (filters.driEmpNo) {
-      request.input("driEmpNo", filters.driEmpNo);
-    }
-    if (filters.driDept) {
-      request.input("driDept", filters.driDept);
-    }
-
-    // 地點相關參數
-    if (filters.location) {
-      request.input("location", "%" + filters.location + "%");
-    }
-
-    // 申請結案狀態參數
-    if (filters.isApply) {
-      request.input("isApply", filters.isApply);
-    }
+    // MSSQL 版本已停用，現在使用 MySQL 參數數組方式
+    // 此方法保留作為備份參考
   }
+  */
 
   /**
    * 獲取特定 MIL 詳情
@@ -450,13 +410,12 @@ class MILService {
    */
   async getMILDetails(serialNumber) {
     try {
-      const request = databaseService.getPool(this.dbName).request();
-      request.input("serialNumber", serialNumber);
+      const sql = "SELECT * FROM v_mil_kd WHERE SerialNumber = ?";
+      const result = await databaseService.query(this.dbName, sql, [
+        serialNumber,
+      ]);
 
-      const sql = "SELECT * FROM v_mil_kd WHERE SerialNumber = @serialNumber";
-      const result = await request.query(sql);
-
-      if (result.recordset.length === 0) {
+      if (result.length === 0) {
         logger.warn("找不到指定的 MIL", { serialNumber });
         throw new Error(`找不到 MIL 編號: ${serialNumber}`);
       }
@@ -465,7 +424,7 @@ class MILService {
 
       return {
         timestamp: new Date().toISOString(),
-        data: result.recordset[0], // 統一字段
+        data: result[0], // 統一字段
       };
     } catch (error) {
       logger.error("MIL 詳情查詢失敗", {
@@ -486,25 +445,22 @@ class MILService {
         SELECT 
           Status, 
           COUNT(*) as Count,
-          AVG(DATEDIFF(day, RecordDate, GETDATE())) as AvgDays
+          AVG(DATEDIFF(NOW(), RecordDate)) as AvgDays
         FROM 
           v_mil_kd 
         GROUP BY 
           Status
       `;
 
-      const result = await databaseService
-        .getPool(this.dbName)
-        .request()
-        .query(sql);
+      const result = await databaseService.query(this.dbName, sql, []);
 
       logger.info("MIL 狀態報告查詢成功", {
-        reportCount: result.recordset.length,
+        reportCount: result.length,
       });
 
       return {
         timestamp: new Date().toISOString(),
-        data: result.recordset, // 統一字段
+        data: result, // 統一字段
       };
     } catch (error) {
       logger.error("MIL 狀態報告查詢失敗", {
@@ -528,18 +484,15 @@ class MILService {
         ORDER BY TypeName
       `;
 
-      const result = await databaseService
-        .getPool(this.dbName)
-        .request()
-        .query(sql);
+      const result = await databaseService.query(this.dbName, sql, []);
 
       logger.info("MIL 類型列表查詢成功", {
-        typeCount: result.recordset.length,
+        typeCount: result.length,
       });
 
       return {
         timestamp: new Date().toISOString(),
-        data: result.recordset.map(row => row.TypeName), // 統一字段
+        data: result.map(row => row.TypeName), // 統一字段
       };
     } catch (error) {
       logger.error("MIL 類型列表查詢失敗", {
@@ -559,19 +512,17 @@ class MILService {
    */
   async getCountBy(columnName) {
     try {
-      const sql = `select ${columnName},count(*) as totalCount from v_mil_kd
-             group by ${columnName}`;
-      const result = await databaseService
-        .getPool(this.dbName)
-        .request()
-        .query(sql);
+      const sql = `SELECT ${columnName}, COUNT(*) as totalCount FROM v_mil_kd
+                   GROUP BY ${columnName}`;
+      const result = await databaseService.query(this.dbName, sql, []);
+
       logger.info("MIL 依特定欄位統計查詢成功", {
-        columnCount: result.recordset.length,
+        columnCount: result.length,
       });
 
       return {
         timestamp: new Date().toISOString(),
-        data: result.recordset, // 統一字段
+        data: result, // 統一字段
       };
     } catch (error) {
       logger.error("MIL 依特定欄位統計查詢失敗", {

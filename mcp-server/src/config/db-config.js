@@ -84,8 +84,21 @@ const dbConfig = {
     connectionLimit: 10,
     // 移除 acquireTimeout - 改用 waitForConnections 和 queueLimit
   },
-  // MIL 資料庫設定
+  // MIL 資料庫設定 - 已改為 MySQL
   mil: {
+    host: process.env.MIL_DB_HOST || "10.1.10.131",
+    port: parseInt(process.env.MIL_DB_PORT) || 3306, // MySQL 預設端口
+    user: process.env.MIL_DB_USER || "qsuser",
+    password: process.env.MIL_DB_PASSWORD || "1q2w3e4R",
+    database: process.env.MIL_DB_NAME || "qsm",
+    charset: "utf8mb4",
+    timezone: "+08:00",
+    connectionLimit: 10,
+  },
+
+  // MIL 資料庫設定 - MSSQL (已停用，保留作為備份)
+  /*
+  mil_mssql_backup: {
     host: process.env.MIL_DB_HOST || "OA-DB2012.flexium.com.cn",
     port: parseInt(process.env.MIL_DB_PORT) || 1433, // MSSQL 預設端口
     user: process.env.MIL_DB_USER || "kduser",
@@ -99,6 +112,7 @@ const dbConfig = {
     },
     connectionLimit: 10,
   },
+  */
 };
 
 export default dbConfig;

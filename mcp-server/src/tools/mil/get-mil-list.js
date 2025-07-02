@@ -142,7 +142,7 @@ export class GetMILListTool extends BaseTool {
           limit: {
             type: "integer",
             description: "每頁返回結果數量限制（選填，預設 100）",
-            default: 100,
+            default: 25,
             minimum: 1,
             maximum: 1000,
           },

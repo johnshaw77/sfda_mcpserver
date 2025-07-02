@@ -6,7 +6,7 @@
  */
 
 import mysql from "mysql2/promise";
-import sql from "mssql";
+// import sql from "mssql"; // 已停用，MIL 現在使用 MySQL
 import config from "../config/config.js";
 import logger from "../config/logger.js";
 
@@ -29,7 +29,6 @@ class DatabaseService {
       // QMS 資料庫初始化（獨立處理）
       if (config.dbConfig?.qms) {
         try {
-          console.log("初始化 QMS 資料庫連接池...");
           console.log("初始化 QMS 資料庫連接池...", {
             config: JSON.stringify(config.dbConfig.qms),
           });
@@ -66,7 +65,47 @@ class DatabaseService {
         }
       }
 
-      // 初始化 MIL 資料庫連接池 (MSSQL)（獨立處理）
+      // 初始化 MIL 資料庫連接池 (MySQL)（獨立處理）
+      if (config.dbConfig?.mil) {
+        try {
+          console.log("初始化 MIL 資料庫連接池 (MySQL)...", {
+            config: JSON.stringify(config.dbConfig.mil),
+          });
+
+          const milPool = mysql.createPool({
+            ...config.dbConfig.mil,
+            waitForConnections: true,
+            queueLimit: 0,
+          });
+
+          // 測試連接
+          console.log("嘗試獲取 MIL 資料庫連接...");
+          logger.info("嘗試獲取 MIL 資料庫連接...");
+          const connection = await milPool.getConnection();
+          console.log("成功獲取 MIL 資料庫連接，執行 ping...");
+          logger.info("成功獲取 MIL 資料庫連接，執行 ping...");
+          await connection.ping();
+          connection.release();
+
+          this.pools.set("mil", milPool);
+          initResults.mil = true;
+          console.log("MIL 資料庫連接池 (MySQL) 初始化成功");
+          logger.info("MIL 資料庫連接池 (MySQL) 初始化成功", {
+            host: config.dbConfig.mil.host,
+            database: config.dbConfig.mil.database,
+          });
+        } catch (error) {
+          console.error("MIL 資料庫連接失敗:", error.message);
+          logger.error("MIL 資料庫連接失敗，但其他服務將繼續", {
+            error: error.message,
+            timestamp: new Date().toISOString(),
+          });
+          initResults.mil = false;
+        }
+      }
+
+      /* 
+      // 原 MIL MSSQL 初始化邏輯（已停用，保留作為備份）
       if (config.dbConfig?.mil) {
         try {
           console.log("初始化 MIL 資料庫連接池 (MSSQL)...");
@@ -107,6 +146,7 @@ class DatabaseService {
           initResults.mil = false;
         }
       }
+      */
 
       // 檢查至少有一個資料庫連接成功
       const hasAnyConnection = Object.values(initResults).some(
@@ -196,7 +236,19 @@ class DatabaseService {
     try {
       const pool = this.getPool(dbName);
 
-      // 處理不同類型的資料庫
+      // 所有資料庫現在都使用 MySQL 查詢
+      const [rows, fields] = await pool.execute(sql, params);
+
+      logger.debug("MySQL 查詢執行成功", {
+        database: dbName,
+        sql: sql.substring(0, 100) + (sql.length > 100 ? "..." : ""),
+        affectedRows: rows.length,
+      });
+
+      return rows;
+
+      /* 
+      // 原 MIL MSSQL 查詢邏輯（已停用，保留作為備份）
       if (dbName === "mil") {
         // MSSQL 查詢
         const result = await pool.request().query(sql);
@@ -220,6 +272,7 @@ class DatabaseService {
 
         return rows;
       }
+      */
     } catch (error) {
       logger.error("SQL 查詢執行失敗", {
         database: dbName,
@@ -237,6 +290,13 @@ class DatabaseService {
   async beginTransaction(dbName) {
     const pool = this.getPool(dbName);
 
+    // 所有資料庫現在都使用 MySQL 交易處理
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+    return connection;
+
+    /* 
+    // 原 MIL MSSQL 交易邏輯（已停用，保留作為備份）
     if (dbName === "mil") {
       // MSSQL 交易處理
       const transaction = new sql.Transaction(pool);
@@ -248,6 +308,7 @@ class DatabaseService {
       await connection.beginTransaction();
       return connection;
     }
+    */
   }
 
   /**
@@ -255,6 +316,14 @@ class DatabaseService {
    */
   async close() {
     try {
+      for (const [name, pool] of this.pools) {
+        // 所有資料庫現在都使用 MySQL 連接池
+        await pool.end();
+        logger.info(`${name} 資料庫連接池已關閉`);
+      }
+
+      /* 
+      // 原 MIL MSSQL 關閉邏輯（已停用，保留作為備份）
       for (const [name, pool] of this.pools) {
         if (name === "mil") {
           // 關閉 MSSQL 連接池
@@ -265,6 +334,7 @@ class DatabaseService {
         }
         logger.info(`${name} 資料庫連接池已關閉`);
       }
+      */
       this.pools.clear();
       this.isInitialized = false;
       logger.info("所有資料庫連接已關閉");
